@@ -1,0 +1,28 @@
+services:
+  kraftbuch:
+    build:
+      context: .
+    image: kraftbuch:local
+    container_name: kraftbuch
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+      DATABASE_PATH: /app/data/kraftbuch.sqlite
+      BACKUP_PATH: /app/backups
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - kraftbuch-data:/app/data
+      - kraftbuch-backups:/app/backups
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  kraftbuch-data:
+  kraftbuch-backups:

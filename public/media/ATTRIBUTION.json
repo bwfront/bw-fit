@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-19",
+  "license": {
+    "name": "Creative Commons Attribution-ShareAlike 3.0",
+    "shortName": "CC BY-SA 3.0",
+    "url": "https://creativecommons.org/licenses/by-sa/3.0/deed.en"
+  },
+  "transformation": "Audio removed; transcoded from the original MOV to H.264 MP4 at 720 px width, 24 fps, yuv420p, with fast-start metadata.",
+  "assets": [
+    {
+      "slug": "flat-bench-press",
+      "file": "/media/exercises/flat-bench-press.mp4",
+      "title": "Dumbbell bench press",
+      "author": "wger.de",
+      "exerciseUrl": "https://wger.de/en/exercise/75/view",
+      "sourceUrl": "https://wger.de/media/exercise-video/75/080c799b-8afd-4130-8d72-9cef0cd79f54.MOV"
+    },
+    {
+      "slug": "incline-bench-press",
+      "file": "/media/exercises/incline-bench-press.mp4",
+      "title": "Incline dumbbell bench press",
+      "author": "wger.de",
+      "exerciseUrl": "https://wger.de/en/exercise/537/view",
+      "sourceUrl": "https://wger.de/media/exercise-video/537/b9c937e9-daeb-42a9-be8e-7a77e368478c.MOV"
+    },
+    {
+      "slug": "seated-shoulder-press",
+      "file": "/media/exercises/seated-shoulder-press.mp4",
+      "title": "Seated dumbbell shoulder press",
+      "author": "wger.de",
+      "exerciseUrl": "https://wger.de/en/exercise/567/view",
+      "sourceUrl": "https://wger.de/media/exercise-video/567/64f33c19-1d96-4b7c-af17-6c6a4941c614.MOV"
+    },
+    {
+      "slug": "dumbbell-curl",
+      "file": "/media/exercises/dumbbell-curl.mp4",
+      "title": "Dumbbell curl",
+      "author": "wger.de",
+      "exerciseUrl": "https://wger.de/en/exercise/92/view",
+      "sourceUrl": "https://wger.de/media/exercise-video/92/8bfb917c-3d0d-49b9-8073-5d7e01c1b894.MOV"
+    },
+    {
+      "slug": "hammer-curl",
+      "file": "/media/exercises/hammer-curl.mp4",
+      "title": "Hammer curl",
+      "author": "wger.de",
+      "exerciseUrl": "https://wger.de/en/exercise/272/view",
+      "sourceUrl": "https://wger.de/media/exercise-video/272/df069052-2173-4f24-855f-a0eebe729f24.MOV"
+    },
+    {
+      "slug": "overhead-triceps-extension",
+      "file": "/media/exercises/overhead-triceps-extension.mp4",
+      "title": "Overhead dumbbell triceps extension",
+      "author": "tuninx",
+      "exerciseUrl": "https://wger.de/en/exercise/211/view",
+      "sourceUrl": "https://wger.de/media/exercise-video/211/85f6eb25-a76c-409e-9af9-497794ac0dfb.MOV"
+    },
+    {
+      "slug": "lateral-raise",
+      "file": "/media/exercises/lateral-raise.mp4",
+      "title": "Dumbbell lateral raise",
+      "author": "wger.de",
+      "exerciseUrl": "https://wger.de/en/exercise/348/view",
+      "sourceUrl": "https://wger.de/media/exercise-video/348/de69928a-8a35-4096-821c-1f46de5e0e03.MOV"
+    }
+  ],
+  "codeNativeFallbacks": [
+    "goblet-squat",
+    "bent-over-row",
+    "lying-leg-raise"
+  ]
+}
