@@ -1,9 +1,22 @@
 import { exerciseMap } from "@/lib/seed";
-import type { PlanDiff, PlanSnapshot, WorkoutExercise } from "@/lib/types";
+import type { PlanCommit, PlanDiff, PlanSnapshot, WorkoutExercise } from "@/lib/types";
+
+export const DUMBBELL_BAR_WEIGHT_GRAMS = 2_500;
 
 export function formatKg(grams: number): string {
-  if (grams === 0) return "Körpergewicht";
   return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(grams / 1000)} kg`;
+}
+
+export function totalExternalLoadGrams(exerciseKey: string, plateWeightGrams: number): number {
+  const dumbbellCount = exerciseMap.get(exerciseKey)?.dumbbellCount ?? 0;
+  if (dumbbellCount === 0) return 0;
+  return (Math.max(0, plateWeightGrams) + DUMBBELL_BAR_WEIGHT_GRAMS) * dumbbellCount;
+}
+
+export function formatExerciseLoad(exerciseKey: string, plateWeightGrams: number): string {
+  const exercise = exerciseMap.get(exerciseKey);
+  if (!exercise || exercise.dumbbellCount === 0) return "Körpergewicht";
+  return `${formatKg(plateWeightGrams)} Scheiben/Hantel · ${formatKg(totalExternalLoadGrams(exerciseKey, plateWeightGrams))} gesamt`;
 }
 
 export function resolveVariant(keys: string[], completedWorkoutCount: number): string {
@@ -11,10 +24,8 @@ export function resolveVariant(keys: string[], completedWorkoutCount: number): s
   return keys[completedWorkoutCount % keys.length];
 }
 
-export function calculateVolume(exerciseKey: string, weightGrams: number, reps: number): number {
-  const exercise = exerciseMap.get(exerciseKey);
-  if (!exercise) return 0;
-  return weightGrams * exercise.loadMultiplier * reps;
+export function calculateVolume(exerciseKey: string, plateWeightGrams: number, reps: number): number {
+  return totalExternalLoadGrams(exerciseKey, plateWeightGrams) * reps;
 }
 
 export function workoutVolume(items: WorkoutExercise[]): number {
@@ -44,7 +55,7 @@ export function diffPlans(previous: PlanSnapshot, current: PlanSnapshot): PlanDi
     if (!before) changes.push("Übung hinzugefügt");
     else if (!after) changes.push("Übung entfernt");
     else {
-      if (before.weightGrams !== after.weightGrams) changes.push(`${formatKg(before.weightGrams)} → ${formatKg(after.weightGrams)}`);
+      if (before.weightGrams !== after.weightGrams) changes.push(`${formatExerciseLoad(key, before.weightGrams)} → ${formatExerciseLoad(key, after.weightGrams)}`);
       const beforeReps = before.sets.map((set) => set.reps ?? "frei").join("/");
       const afterReps = after.sets.map((set) => set.reps ?? "frei").join("/");
       if (beforeReps !== afterReps) changes.push(`${beforeReps} → ${afterReps} Wdh.`);
@@ -57,4 +68,14 @@ export function diffPlans(previous: PlanSnapshot, current: PlanSnapshot): PlanDi
   const currentOrder = current.exercises.map((item) => item.slotId).join();
   if (previousOrder !== currentOrder) diffs.push({ slotId: "order", exerciseName: "Reihenfolge", changes: ["Reihenfolge geändert"] });
   return diffs;
+}
+
+export function visiblePlanVersions(versions: PlanCommit[]): PlanCommit[] {
+  const versionById = new Map(versions.map((version) => [version.id, version]));
+  return versions.filter((version) => {
+    if (!version.parentId) return true;
+    const parent = versionById.get(version.parentId);
+    if (!parent) return true;
+    return diffPlans(parent.snapshot, version.snapshot).some((diff) => diff.slotId !== "order");
+  });
 }

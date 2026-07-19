@@ -2,7 +2,7 @@ import { Scale, Trophy } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { SubmitButton } from "@/components/submit-button";
 import { addBodyWeight } from "@/lib/actions";
-import { formatKg } from "@/lib/domain";
+import { formatExerciseLoad, formatKg } from "@/lib/domain";
 import { getBodyWeights, getExerciseStats, getRecentWorkouts, getSettings } from "@/lib/data";
 
 export default function ProgressPage() {
@@ -16,8 +16,8 @@ export default function ProgressPage() {
     <>
       <AppHeader title="Fortschritt" />
       <main>
-        <p className="eyebrow">Nicht Gefühl. Verlauf.</p>
-        <h1 className="page-title">Stärker wird sichtbar.</h1>
+        <p className="eyebrow">Trainingsdaten und Körpergewicht</p>
+        <h1 className="page-title">Fortschritt</h1>
         <div className="progress-summary">
           <section className="card summary-block"><span className="metric-label">Einheiten</span><strong>{workouts.length}</strong><span>abgeschlossen</span></section>
           <section className="card summary-block accent"><span className="metric-label">Zielgewicht</span><strong>{formatKg(settings.targetWeightGrams)}</strong><span>bis 19.07.27</span></section>
@@ -25,7 +25,7 @@ export default function ProgressPage() {
 
         <div className="section-head"><h2 className="section-title">Kraftprofil</h2><Trophy size={20} /></div>
         {stats.length ? <section className="card stats-chart">{stats.map((item) => (
-          <div className="stat-row" key={item.exerciseKey}><div className="stat-meta"><strong>{item.name}</strong><span className="mono">PR {formatKg(item.maxWeightGrams)}</span></div><div className="stat-bar"><span style={{ width: `${Math.max(5, (item.totalVolumeGrams / maxVolume) * 100)}%` }} /></div><small>{(item.totalVolumeGrams / 1_000_000).toFixed(1)} t · {item.sessions}×</small></div>
+          <div className="stat-row" key={item.exerciseKey}><div className="stat-meta"><strong>{item.name}</strong><span className="mono">PR {formatExerciseLoad(item.exerciseKey, item.maxWeightGrams)}</span></div><div className="stat-bar"><span style={{ width: `${Math.max(5, (item.totalVolumeGrams / maxVolume) * 100)}%` }} /></div><small>{(item.totalVolumeGrams / 1_000_000).toFixed(1)} t · {item.sessions}×</small></div>
         ))}</section> : <div className="empty-card">Schließe dein erstes Training ab. Dann entsteht hier dein Kraftprofil.</div>}
 
         <div className="section-head"><h2 className="section-title">Körpergewicht</h2><Scale size={20} /></div>

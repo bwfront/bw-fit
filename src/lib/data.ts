@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sqlite } from "@/db";
+import { DUMBBELL_BAR_WEIGHT_GRAMS } from "@/lib/domain";
 import { exerciseMap } from "@/lib/seed";
 import type { PlanCommit, PlanSnapshot, ProgressionSuggestion, SetLog, WorkoutExercise, WorkoutSession } from "@/lib/types";
 
@@ -25,8 +26,10 @@ export function getActivePlan(): PlanCommit {
   };
 }
 
-export function getPlanVersions(limit = 30): PlanCommit[] {
-  const rows = sqlite.prepare("SELECT * FROM plan_version ORDER BY created_at DESC LIMIT ?").all(limit) as Row[];
+export function getPlanVersions(limit?: number): PlanCommit[] {
+  const rows = (limit === undefined
+    ? sqlite.prepare("SELECT * FROM plan_version ORDER BY created_at DESC").all()
+    : sqlite.prepare("SELECT * FROM plan_version ORDER BY created_at DESC LIMIT ?").all(limit)) as Row[];
   return rows.map((row) => ({
     id: String(row.id),
     parentId: row.parent_id ? String(row.parent_id) : null,
@@ -138,7 +141,7 @@ export function getExerciseStats() {
   const rows = sqlite.prepare(`
     SELECT we.exercise_key,
       MAX(sl.weight_grams) AS max_weight,
-      SUM(sl.weight_grams * sl.reps * e.load_multiplier) AS total_volume,
+      SUM(CASE WHEN e.dumbbell_count = 0 THEN 0 ELSE (sl.weight_grams + ${DUMBBELL_BAR_WEIGHT_GRAMS}) * sl.reps * e.dumbbell_count END) AS total_volume,
       COUNT(DISTINCT ws.id) AS sessions
     FROM set_log sl
     JOIN workout_exercise we ON we.id = sl.workout_exercise_id
@@ -162,7 +165,7 @@ export function getBackupPayload() {
   const sessionRows = sqlite.prepare("SELECT id FROM workout_session ORDER BY started_at").all() as Row[];
   const suggestionRows = sqlite.prepare("SELECT * FROM progression_suggestion ORDER BY created_at").all() as Row[];
   return {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     exportedAt: new Date().toISOString(),
     planVersions: getPlanVersions(10_000).reverse(),
     activePlanVersionId: String(state.active_plan_version_id),

@@ -3,7 +3,7 @@ export type Exercise = {
   key: string;
   name: string;
   shortName: string;
-  loadMultiplier: 0 | 1 | 2;
+  dumbbellCount: 0 | 1 | 2;
   equipment: "Kurzhantel" | "Körpergewicht";
   demoSlug: string;
   cues: string[];
@@ -17,6 +17,7 @@ export type PlanExercise = {
   slotId: string;
   exerciseKeys: string[];
   variantMode: "fixed" | "alternate";
+  /** Scheibengewicht je Hantel; das Stangengewicht wird separat berechnet. */
   weightGrams: number;
   sets: PlanSetTarget[];
 };
@@ -40,6 +41,7 @@ export type SetLog = {
   workoutExerciseId: string;
   setNumber: number;
   targetReps: number | null;
+  /** Scheibengewicht je Hantel; das Stangengewicht wird separat berechnet. */
   weightGrams: number;
   reps: number | null;
   completed: boolean;

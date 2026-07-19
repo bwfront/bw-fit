@@ -15,7 +15,7 @@ const secret = process.env.BETTER_AUTH_SECRET
 if (!secret) throw new Error("BETTER_AUTH_SECRET fehlt. Erzeuge einen Wert mit: openssl rand -base64 32");
 
 export const auth = betterAuth({
-  appName: "Kraftbuch",
+  appName: "bw-fit",
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
   trustedOrigins: [
     "http://localhost:3000",
@@ -38,7 +38,7 @@ export const auth = betterAuth({
       create: {
         before: async () => {
           const [result] = await db.select({ count: count() }).from(user);
-          if (result.count > 0) throw new APIError("FORBIDDEN", { message: "Kraftbuch hat bereits einen Besitzer." });
+          if (result.count > 0) throw new APIError("FORBIDDEN", { message: "bw-fit hat bereits einen Besitzer." });
         },
       },
     },

@@ -34,7 +34,7 @@ export function AuthForm({ mode }: { mode: "setup" | "login" }) {
       <label>E-Mail<input name="email" type="email" inputMode="email" autoComplete="email" required placeholder="du@zuhause.de" /></label>
       <label>Passwort<input name="password" type="password" autoComplete={mode === "setup" ? "new-password" : "current-password"} minLength={10} required placeholder="Mindestens 10 Zeichen" /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <button className="button primary full" disabled={pending}>{pending ? "Einen Moment…" : mode === "setup" ? "Kraftbuch einrichten" : "Anmelden"}</button>
+      <button className="button primary full" disabled={pending}>{pending ? "Einen Moment…" : mode === "setup" ? "bw-fit einrichten" : "Anmelden"}</button>
     </form>
   );
 }

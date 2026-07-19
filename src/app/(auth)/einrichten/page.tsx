@@ -9,9 +9,9 @@ export default async function SetupPage() {
   return (
     <section className="auth-card">
       <div className="auth-emblem"><span /><span /><span /></div>
-      <p className="eyebrow">Erster Start</p>
-      <h1>Dein Training.<br />Unter deiner Kontrolle.</h1>
-      <p className="lede">Lege den einzigen Zugang an. Deine Daten bleiben auf deinem Server.</p>
+      <p className="eyebrow">Ersteinrichtung</p>
+      <h1>Zugang<br />anlegen</h1>
+      <p className="lede">Lege den einzigen Zugang an. Die Daten werden auf diesem Server gespeichert.</p>
       <AuthForm mode="setup" />
     </section>
   );

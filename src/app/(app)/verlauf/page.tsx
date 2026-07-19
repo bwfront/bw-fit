@@ -2,7 +2,7 @@ import { GitCommitHorizontal, RotateCcw, Trophy } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { SubmitButton } from "@/components/submit-button";
 import { revertPlan } from "@/lib/actions";
-import { diffPlans } from "@/lib/domain";
+import { diffPlans, visiblePlanVersions } from "@/lib/domain";
 import { getPlanVersions, getRecentWorkouts } from "@/lib/data";
 
 function fullDate(value: string) {
@@ -11,10 +11,11 @@ function fullDate(value: string) {
 
 export default function HistoryPage() {
   const versions = getPlanVersions();
+  const visibleVersions = visiblePlanVersions(versions).slice(0, 30);
   const workouts = getRecentWorkouts(30);
   const versionMap = new Map(versions.map((version) => [version.id, version]));
   const timeline = [
-    ...versions.map((version) => ({ type: "commit" as const, date: version.createdAt, version })),
+    ...visibleVersions.map((version) => ({ type: "commit" as const, date: version.createdAt, version })),
     ...workouts.map((workout) => ({ type: "workout" as const, date: workout.completedAt ?? workout.startedAt, workout })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -22,8 +23,8 @@ export default function HistoryPage() {
     <>
       <AppHeader title="Verlauf" />
       <main>
-        <p className="eyebrow">Unverlierbar</p>
-        <h1 className="page-title">Jeder Satz hat Geschichte.</h1>
+        <p className="eyebrow">Trainings und Planänderungen</p>
+        <h1 className="page-title">Verlauf</h1>
         <div className="commit-list">
           {timeline.map((entry) => {
             if (entry.type === "workout") return (

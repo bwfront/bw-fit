@@ -6,8 +6,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sqlite } from "@/db";
-import { calculateVolume, eligibleForProgression } from "@/lib/domain";
+import { calculateVolume, DUMBBELL_BAR_WEIGHT_GRAMS, eligibleForProgression } from "@/lib/domain";
 import { getActivePlan, getActiveWorkout, getBackupPayload, getWorkoutSession } from "@/lib/data";
+import { applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { exerciseMap } from "@/lib/seed";
 import { requireOwner } from "@/lib/session";
 import type { PlanSnapshot } from "@/lib/types";
@@ -112,7 +113,7 @@ export async function completeWorkout(sessionId: string) {
       WHERE NOT EXISTS (SELECT 1 FROM progression_suggestion WHERE slot_id = ? AND status = 'pending')
     `);
     for (const item of workout.exercises) {
-      if (!item.skipped && eligibleForProgression(item) && item.sets[0]?.weightGrams > 0) {
+      if (!item.skipped && eligibleForProgression(item) && (exerciseMap.get(item.exerciseKey)?.dumbbellCount ?? 0) > 0) {
         const from = item.sets[0].weightGrams;
         addSuggestion.run(crypto.randomUUID(), item.exerciseKey, item.slotId, from, from + 2500, Date.now(), item.slotId);
       }
@@ -237,7 +238,7 @@ export async function importBackup(formData: FormData) {
   const file = formData.get("backup");
   if (!(file instanceof File) || !file.size) throw new Error("Keine Sicherungsdatei ausgewählt.");
   const parsed = z.object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     exportedAt: z.string(),
     planVersions: z.array(z.object({ id: z.string(), parentId: z.string().nullable(), message: z.string(), snapshot: snapshotSchema, createdAt: z.string() })),
     activePlanVersionId: z.string(),
@@ -268,8 +269,10 @@ export async function importBackup(formData: FormData) {
     sqlite.prepare("DELETE FROM app_state").run();
     sqlite.prepare("DELETE FROM plan_version").run();
     for (const version of parsed.planVersions) {
+      let snapshot = parsed.schemaVersion === 1 ? migrateLegacyPlanWeights(version.snapshot) : version.snapshot;
+      if (parsed.schemaVersion === 1 && version.id === parsed.activePlanVersionId) snapshot = applyLegRaiseDefault(snapshot).snapshot;
       sqlite.prepare(`INSERT INTO plan_version (id, parent_id, message, snapshot_json, created_at) VALUES (?, ?, ?, ?, ?)`)
-        .run(version.id, version.parentId, version.message, JSON.stringify(version.snapshot), new Date(version.createdAt).getTime());
+        .run(version.id, version.parentId, version.message, JSON.stringify(snapshot), new Date(version.createdAt).getTime());
     }
     sqlite.prepare("INSERT INTO app_state (id, active_plan_version_id, completed_workout_count) VALUES ('singleton', ?, ?)")
       .run(parsed.activePlanVersionId, parsed.completedWorkoutCount);
@@ -286,14 +289,30 @@ export async function importBackup(formData: FormData) {
         sqlite.prepare("INSERT INTO workout_exercise (id, session_id, exercise_key, slot_id, position, skipped) VALUES (?, ?, ?, ?, ?, ?)")
           .run(item.id, workout.id, item.exerciseKey, item.slotId, item.position, item.skipped ? 1 : 0);
         for (const set of item.sets) {
+          const weightGrams = parsed.schemaVersion === 1 ? legacyWeightToPlateWeight(item.exerciseKey, set.weightGrams) : set.weightGrams;
           sqlite.prepare("INSERT INTO set_log (id, workout_exercise_id, set_number, target_reps, weight_grams, reps, completed, note, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-            .run(set.id, item.id, set.setNumber, set.targetReps, set.weightGrams, set.reps, set.completed ? 1 : 0, set.note, Date.now());
+            .run(set.id, item.id, set.setNumber, set.targetReps, weightGrams, set.reps, set.completed ? 1 : 0, set.note, Date.now());
         }
       }
     }
     for (const suggestion of parsed.suggestions) {
+      const fromWeightGrams = parsed.schemaVersion === 1 ? legacyWeightToPlateWeight(suggestion.exerciseKey, suggestion.fromWeightGrams) : suggestion.fromWeightGrams;
+      const toWeightGrams = parsed.schemaVersion === 1 ? legacyWeightToPlateWeight(suggestion.exerciseKey, suggestion.toWeightGrams) : suggestion.toWeightGrams;
       sqlite.prepare("INSERT INTO progression_suggestion (id, exercise_key, slot_id, from_weight_grams, to_weight_grams, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .run(suggestion.id, suggestion.exerciseKey, suggestion.slotId, suggestion.fromWeightGrams, suggestion.toWeightGrams, suggestion.status, new Date(suggestion.createdAt).getTime());
+        .run(suggestion.id, suggestion.exerciseKey, suggestion.slotId, fromWeightGrams, toWeightGrams, suggestion.status, new Date(suggestion.createdAt).getTime());
+    }
+    if (parsed.schemaVersion === 1) {
+      sqlite.exec(`
+        UPDATE workout_session
+        SET total_volume_grams = COALESCE((
+          SELECT SUM(CASE WHEN e.dumbbell_count = 0 THEN 0 ELSE (sl.weight_grams + ${DUMBBELL_BAR_WEIGHT_GRAMS}) * e.dumbbell_count * sl.reps END)
+          FROM workout_exercise we
+          JOIN set_log sl ON sl.workout_exercise_id = we.id
+          JOIN exercise e ON e.key = we.exercise_key
+          WHERE we.session_id = workout_session.id AND sl.completed = 1
+        ), 0)
+        WHERE status = 'completed'
+      `);
     }
   })();
   revalidatePath("/");

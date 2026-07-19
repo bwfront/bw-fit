@@ -2,7 +2,7 @@ import { ArrowRight, Check, History, Play, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { applySuggestion, dismissSuggestion, startWorkout } from "@/lib/actions";
-import { formatKg, resolveVariant } from "@/lib/domain";
+import { formatExerciseLoad, formatKg, resolveVariant } from "@/lib/domain";
 import { getActivePlan, getActiveWorkout, getBodyWeights, getCompletedWorkoutCount, getPendingSuggestions, getRecentWorkouts, getSettings } from "@/lib/data";
 import { exerciseMap } from "@/lib/seed";
 
@@ -29,7 +29,7 @@ export default function TodayPage() {
         <p className="eyebrow">Sonntag · Trainingszyklus {String(count + 1).padStart(2, "0")}</p>
         <section className="hero-workout">
           <div className="hero-top"><span className="status-tag">{activeWorkout ? "Training läuft" : "Plan bereit"}</span><span className="hero-count">8 Übungen</span></div>
-          <h1>{activeWorkout ? "Weiter im Satz." : "Arbeit, die bleibt."}</h1>
+          <h1>{activeWorkout ? "Training fortsetzen" : "Heutiges Training"}</h1>
           <p className="variant">Heute: {nextVariants.join(" · ")}</p>
           <div className="hero-actions">
             {activeWorkout ? (
@@ -50,7 +50,7 @@ export default function TodayPage() {
           <section className="card metric-card orange">
             <span className="metric-label">Letzter Eintrag</span>
             <div className="metric-value">{recent ? germanDate(recent.completedAt ?? recent.startedAt) : "–"}</div>
-            <p className="metric-sub">{recent ? `${(recent.totalVolumeGrams / 1_000_000).toFixed(1)} t Volumen` : "Dein erster Satz wartet"}</p>
+            <p className="metric-sub">{recent ? `${(recent.totalVolumeGrams / 1_000_000).toFixed(1)} t Volumen` : "Noch kein Training gespeichert"}</p>
           </section>
         </div>
 
@@ -58,7 +58,7 @@ export default function TodayPage() {
           <div className="section-head"><h2 className="section-title">Nächster Schritt</h2><TrendingUp size={20} /></div>
           <div className="list-stack">{suggestions.slice(0, 2).map((suggestion) => (
             <article className="card suggestion" key={suggestion.id}>
-              <div><strong>{exerciseMap.get(suggestion.exerciseKey)?.shortName}</strong><p>Sauber geschafft: {formatKg(suggestion.fromWeightGrams)} → {formatKg(suggestion.toWeightGrams)}</p></div>
+              <div><strong>{exerciseMap.get(suggestion.exerciseKey)?.shortName}</strong><p>Ziel erreicht: {formatExerciseLoad(suggestion.exerciseKey, suggestion.fromWeightGrams)} → {formatExerciseLoad(suggestion.exerciseKey, suggestion.toWeightGrams)}</p></div>
               <div className="suggestion-actions">
                 <form action={applySuggestion.bind(null, suggestion.id)}><button className="button small steel"><Check size={15} />Übernehmen</button></form>
                 <form action={dismissSuggestion.bind(null, suggestion.id)}><button className="button small">Später</button></form>

@@ -27,8 +27,8 @@ export default async function WorkoutSummaryPage({ params }: { params: Promise<{
   return (
     <main className="summary-page">
       <div className="summary-check"><CheckCircle2 size={44} /></div>
-      <p className="eyebrow">Einheit gespeichert</p>
-      <h1>Arbeit<br />eingetragen.</h1>
+      <p className="eyebrow">Abgeschlossen</p>
+      <h1>Training<br />gespeichert</h1>
       <div className="summary-metrics">
         <div><Dumbbell size={18} /><strong>{(workout.totalVolumeGrams / 1_000_000).toFixed(1)} t</strong><span>Volumen</span></div>
         <div><Trophy size={18} /><strong>{recordCount}</strong><span>Neue Rekorde</span></div>

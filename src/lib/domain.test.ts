@@ -1,20 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { calculateVolume, diffPlans, eligibleForProgression, formatKg, resolveVariant } from "@/lib/domain";
-import { localVideoDemoSlugs } from "@/lib/media";
+import { calculateVolume, diffPlans, eligibleForProgression, formatExerciseLoad, formatKg, resolveVariant, totalExternalLoadGrams, visiblePlanVersions } from "@/lib/domain";
+import { codeNativeExerciseDiagramSlugs, localVideoDemoSlugs } from "@/lib/media";
+import { applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { initialPlan } from "@/lib/seed";
-import type { WorkoutExercise } from "@/lib/types";
+import type { PlanCommit, WorkoutExercise } from "@/lib/types";
 
 describe("Gewichte und Volumen", () => {
-  it("formatiert das Gewicht einer Hantel deutsch", () => {
+  it("formatiert Kilogramm und erklärt Scheiben- sowie Gesamtgewicht", () => {
     expect(formatKg(17_500)).toBe("17,5 kg");
-    expect(formatKg(0)).toBe("Körpergewicht");
+    expect(formatKg(0)).toBe("0 kg");
+    expect(formatExerciseLoad("flat-bench-press", 10_000)).toBe("10 kg Scheiben/Hantel · 25 kg gesamt");
+    expect(formatExerciseLoad("lying-leg-raise", 0)).toBe("Körpergewicht");
   });
 
-  it("multipliziert das Volumen mit der verwendeten Hantelanzahl", () => {
-    expect(calculateVolume("flat-bench-press", 10_000, 12)).toBe(240_000);
-    expect(calculateVolume("goblet-squat", 17_500, 10)).toBe(175_000);
+  it("addiert das Stangengewicht und berechnet 0, 1 und 2 Hanteln", () => {
+    expect(totalExternalLoadGrams("flat-bench-press", 10_000)).toBe(25_000);
+    expect(calculateVolume("flat-bench-press", 10_000, 12)).toBe(300_000);
+    expect(calculateVolume("goblet-squat", 10_000, 10)).toBe(125_000);
+    expect(calculateVolume("lateral-raise", 10_000, 12)).toBe(300_000);
+    expect(calculateVolume("lying-leg-raise", 0, 15)).toBe(0);
   });
 });
 
@@ -45,14 +51,44 @@ describe("Plan-Historie", () => {
     next.exercises[0].weightGrams = 20_000;
     next.exercises[0].sets = [{ reps: 12 }, { reps: 12 }, { reps: 12 }];
     const diff = diffPlans(initialPlan, next);
-    expect(diff[0].changes).toContain("17,5 kg → 20 kg");
+    expect(diff[0].changes).toContain("17,5 kg Scheiben/Hantel · 20 kg gesamt → 20 kg Scheiben/Hantel · 22,5 kg gesamt");
     expect(diff[0].changes).toContain("10/10/10 → 12/12/12 Wdh.");
   });
 
   it("enthält die acht vereinbarten Planpositionen", () => {
     expect(initialPlan.exercises).toHaveLength(8);
     expect(initialPlan.exercises.at(-1)?.exerciseKeys).toEqual(["lying-leg-raise"]);
-    expect(initialPlan.exercises.at(-1)?.sets.every((set) => set.reps === null)).toBe(true);
+    expect(initialPlan.exercises.at(-1)?.sets.map((set) => set.reps)).toEqual([15, 15, 15]);
+  });
+
+  it("blendet reine Reihenfolgeversionen aus, ohne die gespeicherte Kette zu verändern", () => {
+    const base: PlanCommit = { id: "base", parentId: null, message: "Start", snapshot: structuredClone(initialPlan), createdAt: "2026-07-19T10:00:00.000Z" };
+    const reorderedSnapshot = structuredClone(initialPlan);
+    [reorderedSnapshot.exercises[0], reorderedSnapshot.exercises[1]] = [reorderedSnapshot.exercises[1], reorderedSnapshot.exercises[0]];
+    const reordered: PlanCommit = { id: "order", parentId: base.id, message: "Reihenfolge geändert", snapshot: reorderedSnapshot, createdAt: "2026-07-19T10:01:00.000Z" };
+    const changedSnapshot = structuredClone(reorderedSnapshot);
+    changedSnapshot.exercises.find((item) => item.slotId === "slot-squat")!.weightGrams = 20_000;
+    const changed: PlanCommit = { id: "changed", parentId: reordered.id, message: "Goblet Squat angepasst", snapshot: changedSnapshot, createdAt: "2026-07-19T10:02:00.000Z" };
+    const storedVersions = [changed, reordered, base];
+
+    expect(visiblePlanVersions(storedVersions).map((version) => version.id)).toEqual(["changed", "base"]);
+    expect(storedVersions.map(({ id, parentId }) => ({ id, parentId }))).toEqual([
+      { id: "changed", parentId: "order" },
+      { id: "order", parentId: "base" },
+      { id: "base", parentId: null },
+    ]);
+    expect(diffPlans(reordered.snapshot, changed.snapshot).find((diff) => diff.slotId === "slot-squat")?.changes).toHaveLength(1);
+  });
+
+  it("zeigt gemischte fachliche und Reihenfolgeänderungen weiterhin an", () => {
+    const base: PlanCommit = { id: "base", parentId: null, message: "Start", snapshot: structuredClone(initialPlan), createdAt: "2026-07-19T10:00:00.000Z" };
+    const mixedSnapshot = structuredClone(initialPlan);
+    [mixedSnapshot.exercises[0], mixedSnapshot.exercises[1]] = [mixedSnapshot.exercises[1], mixedSnapshot.exercises[0]];
+    mixedSnapshot.exercises.find((item) => item.slotId === "slot-squat")!.sets = [{ reps: 12 }, { reps: 12 }, { reps: 12 }];
+    const mixed: PlanCommit = { id: "mixed", parentId: base.id, message: "Plan angepasst", snapshot: mixedSnapshot, createdAt: "2026-07-19T10:01:00.000Z" };
+
+    expect(diffPlans(base.snapshot, mixed.snapshot).map((diff) => diff.slotId)).toEqual(["slot-squat", "order"]);
+    expect(visiblePlanVersions([mixed, base]).map((version) => version.id)).toEqual(["mixed", "base"]);
   });
 });
 
@@ -60,13 +96,36 @@ describe("Übungsmedien", () => {
   it("liefert für jede Übungsvariante ein lokales Video oder Bewegungsdiagramm", () => {
     const manifest = JSON.parse(readFileSync(resolve("public/media/ATTRIBUTION.json"), "utf8")) as {
       assets: Array<{ slug: string; file: string }>;
-      codeNativeFallbacks: string[];
+      codeNativeIllustrations: Array<{ slug: string; title: string; source: string }>;
     };
     expect(manifest.assets.map((asset) => asset.slug).sort()).toEqual([...localVideoDemoSlugs].sort());
     for (const asset of manifest.assets) {
       expect(existsSync(resolve("public", asset.file.replace(/^\//, "")))).toBe(true);
     }
-    const available = new Set([...manifest.assets.map((asset) => asset.slug), ...manifest.codeNativeFallbacks]);
+    expect(manifest.codeNativeIllustrations.map((item) => item.slug).sort()).toEqual([...codeNativeExerciseDiagramSlugs].sort());
+    expect(manifest.codeNativeIllustrations.every((item) => item.title && item.source.includes("code-native"))).toBe(true);
+    const available = new Set([...manifest.assets.map((asset) => asset.slug), ...manifest.codeNativeIllustrations.map((item) => item.slug)]);
     expect(Object.values(initialPlan.exercises).flatMap((entry) => entry.exerciseKeys).every((key) => available.has(key))).toBe(true);
+  });
+});
+
+describe("Datenmigrationen", () => {
+  it("konvertiert alte Gesamtgewichte eindeutig in Scheibengewichte", () => {
+    expect(legacyWeightToPlateWeight("flat-bench-press", 10_000)).toBe(7_500);
+    expect(legacyWeightToPlateWeight("lying-leg-raise", 0)).toBe(0);
+    const legacy = structuredClone(initialPlan);
+    legacy.exercises[0].weightGrams = 17_500;
+    expect(migrateLegacyPlanWeights(legacy).exercises[0].weightGrams).toBe(15_000);
+  });
+
+  it("setzt nur den unveränderten freien Beinheben-Standard auf 3 x 15", () => {
+    const legacy = structuredClone(initialPlan);
+    legacy.exercises.at(-1)!.sets = [{ reps: null }, { reps: null }, { reps: null }];
+    expect(applyLegRaiseDefault(legacy).snapshot.exercises.at(-1)?.sets.map((set) => set.reps)).toEqual([15, 15, 15]);
+
+    legacy.exercises.at(-1)!.sets = [{ reps: 12 }, { reps: null }, { reps: null }];
+    const customized = applyLegRaiseDefault(legacy);
+    expect(customized.changed).toBe(false);
+    expect(customized.snapshot.exercises.at(-1)?.sets.map((set) => set.reps)).toEqual([12, null, null]);
   });
 });

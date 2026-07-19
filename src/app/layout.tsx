@@ -1,12 +1,24 @@
 import type { Metadata, Viewport } from "next";
+import { PwaProvider } from "@/components/pwa-provider";
 import "./globals.css";
 
+const themeBootScript = `
+  (() => {
+    try {
+      const saved = localStorage.getItem("bw-fit-theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.dataset.theme = saved;
+      }
+    } catch {}
+  })();
+`;
+
 export const metadata: Metadata = {
-  title: { default: "Kraftbuch", template: "%s · Kraftbuch" },
+  title: { default: "bw-fit", template: "%s · bw-fit" },
   description: "Dein persönliches Trainingsprotokoll.",
-  applicationName: "Kraftbuch",
-  appleWebApp: { capable: true, title: "Kraftbuch", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icon.svg", apple: "/icon-192.png" },
+  applicationName: "bw-fit",
+  appleWebApp: { capable: true, title: "bw-fit", statusBarStyle: "black-translucent" },
+  icons: { icon: "/icon.svg", apple: "/icon-180.png" },
 };
 
 export const viewport: Viewport = {
@@ -22,7 +34,8 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="de" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body>{children}</body>
+      <head><script dangerouslySetInnerHTML={{ __html: themeBootScript }} /></head>
+      <body><PwaProvider>{children}</PwaProvider></body>
     </html>
   );
 }

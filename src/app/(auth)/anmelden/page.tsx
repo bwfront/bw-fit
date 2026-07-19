@@ -10,8 +10,8 @@ export default async function LoginPage() {
   return (
     <section className="auth-card compact">
       <div className="auth-emblem"><span /><span /><span /></div>
-      <p className="eyebrow">Willkommen zurück</p>
-      <h1>Weiter<br />im Satz.</h1>
+      <p className="eyebrow">Zugang</p>
+      <h1>Anmelden</h1>
       <AuthForm mode="login" />
     </section>
   );

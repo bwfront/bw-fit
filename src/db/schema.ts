@@ -53,7 +53,7 @@ export const exercise = sqliteTable("exercise", {
   key: text("key").notNull().unique(),
   name: text("name").notNull(),
   shortName: text("short_name").notNull(),
-  loadMultiplier: integer("load_multiplier").notNull(),
+  dumbbellCount: integer("dumbbell_count").notNull(),
   equipment: text("equipment").notNull(),
   demoSlug: text("demo_slug").notNull(),
   cuesJson: text("cues_json").notNull(),

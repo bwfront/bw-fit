@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { ExerciseDemoButton } from "@/components/exercise-demo";
 import { cancelWorkout, completeWorkout, saveWorkoutNote, setExerciseSkipped, updateSet, updateSetNote } from "@/lib/actions";
-import { formatKg } from "@/lib/domain";
+import { formatExerciseLoad, totalExternalLoadGrams } from "@/lib/domain";
 import { exerciseMap } from "@/lib/seed";
 import type { WorkoutSession } from "@/lib/types";
 
@@ -19,6 +19,7 @@ export function WorkoutRunner({ initial, restSeconds, previous }: { initial: Wor
   const [pending, startTransition] = useTransition();
   const item = workout.exercises[activeIndex];
   const exercise = exerciseMap.get(item.exerciseKey)!;
+  const activeSetId = item.sets.find((set) => !set.completed)?.id;
   const completedSets = workout.exercises.flatMap((entry) => entry.sets).filter((set) => set.completed).length;
   const totalSets = workout.exercises.flatMap((entry) => entry.sets).length;
 
@@ -71,24 +72,33 @@ export function WorkoutRunner({ initial, restSeconds, previous }: { initial: Wor
       <section className="exercise-stage">
         <div className="exercise-index"><span>{String(activeIndex + 1).padStart(2, "0")}</span><i />{String(workout.exercises.length).padStart(2, "0")}</div>
         <div className="exercise-title-row"><div><p className="eyebrow">{exercise.equipment} · {item.skipped ? "Übersprungen" : "Aktiv"}</p><h1>{exercise.name}</h1></div><ExerciseDemoButton exercise={exercise} /></div>
-        <p className="previous-line">Zuletzt: {previous[item.exerciseKey]?.length ? previous[item.exerciseKey].map((set) => `${formatKg(set.weightGrams)} × ${set.reps}`).join(" · ") : "Noch keine Werte"}</p>
+        <p className="previous-line">Zuletzt: {previous[item.exerciseKey]?.length ? previous[item.exerciseKey].map((set) => `${formatExerciseLoad(item.exerciseKey, set.weightGrams)} × ${set.reps}`).join(" · ") : "Noch keine Werte"}</p>
 
         <div className={`set-stack ${item.skipped ? "is-skipped" : ""}`}>
-          <div className="set-labels"><span>Satz</span><span>Gewicht</span><span>Wdh.</span><span>Fertig</span></div>
+          <div className="set-labels"><span>Satz</span><span>{exercise.dumbbellCount === 0 ? "Körper" : "Scheiben"}</span><span>Wdh.</span><span>Fertig</span></div>
           {item.sets.map((set) => (
-            <div className={`set-row ${set.completed ? "complete" : ""}`} key={set.id}>
+            <div className={`set-row ${set.completed ? "complete" : ""} ${set.id === activeSetId ? "current" : ""}`} key={set.id}>
               <strong className="mono">{String(set.setNumber).padStart(2, "0")}</strong>
-              <div className="stepper weight-stepper"><button aria-label="Gewicht verringern" onClick={() => changeSet(set.id, { weightGrams: Math.max(0, set.weightGrams - 500) })}><Minus size={14} /></button><span><b className="mono">{set.weightGrams / 1000}</b><small>kg</small></span><button aria-label="Gewicht erhöhen" onClick={() => changeSet(set.id, { weightGrams: set.weightGrams + 500 })}><Plus size={14} /></button></div>
+              <div className="stepper weight-stepper"><button aria-label="Scheibengewicht verringern" disabled={exercise.dumbbellCount === 0} onClick={() => changeSet(set.id, { weightGrams: Math.max(0, set.weightGrams - 500) })}><Minus size={14} /></button><span><b className="mono">{exercise.dumbbellCount === 0 ? "–" : set.weightGrams / 1000}</b><small>{exercise.dumbbellCount === 0 ? "Körpergewicht" : `kg · ${totalExternalLoadGrams(item.exerciseKey, set.weightGrams) / 1000} ges.`}</small></span><button aria-label="Scheibengewicht erhöhen" disabled={exercise.dumbbellCount === 0} onClick={() => changeSet(set.id, { weightGrams: set.weightGrams + 500 })}><Plus size={14} /></button></div>
               <div className="stepper rep-stepper"><button aria-label="Wiederholungen verringern" onClick={() => changeSet(set.id, { reps: Math.max(0, (set.reps ?? 0) - 1) })}><Minus size={14} /></button><span><b className="mono">{set.reps ?? 0}</b><small>{set.targetReps ? `/${set.targetReps}` : "frei"}</small></span><button aria-label="Wiederholungen erhöhen" onClick={() => changeSet(set.id, { reps: (set.reps ?? 0) + 1 })}><Plus size={14} /></button></div>
               <button className="set-check" aria-label={`Satz ${set.setNumber} ${set.completed ? "öffnen" : "abschließen"}`} aria-pressed={set.completed} onClick={() => changeSet(set.id, { completed: !set.completed }, !set.completed)}><Check size={22} strokeWidth={3} /></button>
-              <input className="set-note" aria-label={`Notiz zu Satz ${set.setNumber}`} defaultValue={set.note ?? ""} maxLength={500} placeholder="Satznotiz …" onBlur={(event) => startTransition(() => updateSetNote(set.id, event.target.value))} />
+              <details className="set-note-details" open={Boolean(set.note)}>
+                <summary>Notiz{set.note ? " vorhanden" : " hinzufügen"}</summary>
+                <input className="set-note" aria-label={`Notiz zu Satz ${set.setNumber}`} defaultValue={set.note ?? ""} maxLength={500} placeholder="Zum Beispiel Technik oder Tagesform" onBlur={(event) => startTransition(() => updateSetNote(set.id, event.target.value))} />
+              </details>
             </div>
           ))}
         </div>
 
         <button className="skip-button" onClick={skip}><SkipForward size={16} />{item.skipped ? "Übung wieder aufnehmen" : "Übung überspringen"}</button>
-        <label className="workout-note">Notiz zu diesem Training<textarea defaultValue={workout.note ?? ""} onBlur={(event) => startTransition(() => saveWorkoutNote(workout.id, event.target.value))} placeholder="Form, Energie, Besonderheiten …" /></label>
-        <button type="button" className="cancel-workout" onClick={() => { if (window.confirm("Dieses Training wirklich verwerfen? Die Einheit bleibt als abgebrochen markiert.")) startTransition(() => cancelWorkout(workout.id)); }}>Training verwerfen</button>
+        <details className="workout-note" open={Boolean(workout.note)}>
+          <summary>Trainingsnotiz{workout.note ? " vorhanden" : " hinzufügen"}</summary>
+          <label>Notiz zu diesem Training<textarea defaultValue={workout.note ?? ""} onBlur={(event) => startTransition(() => saveWorkoutNote(workout.id, event.target.value))} placeholder="Form, Energie, Besonderheiten" /></label>
+        </details>
+        <details className="workout-more">
+          <summary>Weitere Aktionen</summary>
+          <button type="button" className="cancel-workout" onClick={() => { if (window.confirm("Dieses Training wirklich verwerfen? Die Einheit bleibt als abgebrochen markiert.")) startTransition(() => cancelWorkout(workout.id)); }}>Training verwerfen</button>
+        </details>
       </section>
 
       <footer className="workout-footer">

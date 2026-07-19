@@ -10,7 +10,7 @@ export async function GET() {
   return new Response(JSON.stringify(payload, null, 2), {
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "content-disposition": `attachment; filename="kraftbuch-${date}.json"`,
+      "content-disposition": `attachment; filename="bw-fit-${date}.json"`,
       "cache-control": "no-store",
     },
   });

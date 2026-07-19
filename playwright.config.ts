@@ -21,6 +21,7 @@ export default defineConfig({
       BACKUP_PATH: `/tmp/kraftbuch-e2e-backups-${process.pid}`,
       BETTER_AUTH_SECRET: "playwright-only-secret-that-is-long-enough-2026",
       BETTER_AUTH_URL: "http://127.0.0.1:3000",
+      NEXT_PUBLIC_ENABLE_PWA: "true",
     },
   },
 });

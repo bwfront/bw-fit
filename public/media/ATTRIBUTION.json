@@ -65,9 +65,21 @@
       "sourceUrl": "https://wger.de/media/exercise-video/348/de69928a-8a35-4096-821c-1f46de5e0e03.MOV"
     }
   ],
-  "codeNativeFallbacks": [
-    "goblet-squat",
-    "bent-over-row",
-    "lying-leg-raise"
+  "codeNativeIllustrations": [
+    {
+      "slug": "goblet-squat",
+      "title": "Goblet Squat – Start- und Endposition",
+      "source": "Eigene code-native SVG-Illustration; kein externes Asset"
+    },
+    {
+      "slug": "bent-over-row",
+      "title": "Vorgebeugtes Kurzhantel-Rudern – Start- und Endposition",
+      "source": "Eigene code-native SVG-Illustration; kein externes Asset"
+    },
+    {
+      "slug": "lying-leg-raise",
+      "title": "Beinheben im Liegen – Start- und Endposition",
+      "source": "Eigene code-native SVG-Illustration; kein externes Asset"
+    }
   ]
 }
