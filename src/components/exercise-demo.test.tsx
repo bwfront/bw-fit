@@ -1,22 +1,12 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ExerciseDiagram } from "@/components/exercise-demo";
+import { hasLocalExerciseVideo, localVideoDemoSlugs } from "@/lib/media";
+import { exercises } from "@/lib/seed";
 
-describe("Übungsspezifische Bewegungsdiagramme", () => {
-  it.each([
-    ["goblet-squat", "Goblet Squat", "diagram-weight"],
-    ["bent-over-row", "Vorgebeugtes Rudern", "diagram-weight"],
-    ["lying-leg-raise", "Beinheben im Liegen", "diagram-core"],
-  ])("rendert für %s eine eigene, beschriftete SVG-Techniktafel", (slug, accessibleName, distinguishingClass) => {
-    const markup = renderToStaticMarkup(<ExerciseDiagram slug={slug} />);
-    expect(markup).toContain(`data-exercise="${slug}"`);
-    expect(markup).toContain(`aria-label="${accessibleName}`);
-    expect(markup).toContain(distinguishingClass);
-    expect(markup).toContain("START");
-    expect(markup).toContain("ENDE");
-  });
-
-  it("verwendet für unbekannte Übungen keine generische Figur", () => {
-    expect(renderToStaticMarkup(<ExerciseDiagram slug="unbekannt" />)).toBe("");
+describe("Übungs-Demonstrationsvideos", () => {
+  it("stellt für jede Übung des Plans ein lokales Video bereit", () => {
+    expect(localVideoDemoSlugs).toHaveLength(exercises.length);
+    for (const exercise of exercises) {
+      expect(hasLocalExerciseVideo(exercise.demoSlug)).toBe(true);
+    }
   });
 });

@@ -76,6 +76,38 @@ export type BodyWeightEntry = {
   note: string | null;
 };
 
+export type ProgressWeek = {
+  weekStart: string;
+  sessions: number;
+  volumeGrams: number;
+  reachedGoal: boolean;
+  isCurrent: boolean;
+};
+
+export type ProgressDay = {
+  date: string;
+  sessions: number;
+  isToday: boolean;
+};
+
+export type PersonalRecord = {
+  exerciseKey: string;
+  name: string;
+  weightGrams: number;
+  achievedAt: string;
+};
+
+export type ProgressOverview = {
+  weeklyTarget: number;
+  completedCount: number;
+  currentSessions: number;
+  streak: number;
+  weeks: ProgressWeek[];
+  days: ProgressDay[];
+  bodyWeights: BodyWeightEntry[];
+  records: PersonalRecord[];
+};
+
 export type ProgressionSuggestion = {
   id: string;
   exerciseKey: string;

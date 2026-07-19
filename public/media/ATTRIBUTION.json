@@ -1,18 +1,19 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedAt": "2026-07-19",
-  "license": {
-    "name": "Creative Commons Attribution-ShareAlike 3.0",
-    "shortName": "CC BY-SA 3.0",
-    "url": "https://creativecommons.org/licenses/by-sa/3.0/deed.en"
+  "licenses": {
+    "CC-BY-SA-3.0": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "CC-BY-SA-4.0": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "CC-BY-3.0": "https://creativecommons.org/licenses/by/3.0/deed.en"
   },
-  "transformation": "Audio removed; transcoded from the original MOV to H.264 MP4 at 720 px width, 24 fps, yuv420p, with fast-start metadata.",
+  "transformation": "Where present, audio was removed; sources were transcoded to H.264 MP4 at a maximum width of 720 px, 24 fps, yuv420p, with fast-start metadata.",
   "assets": [
     {
       "slug": "flat-bench-press",
       "file": "/media/exercises/flat-bench-press.mp4",
       "title": "Dumbbell bench press",
       "author": "wger.de",
+      "license": "CC-BY-SA-3.0",
       "exerciseUrl": "https://wger.de/en/exercise/75/view",
       "sourceUrl": "https://wger.de/media/exercise-video/75/080c799b-8afd-4130-8d72-9cef0cd79f54.MOV"
     },
@@ -21,6 +22,7 @@
       "file": "/media/exercises/incline-bench-press.mp4",
       "title": "Incline dumbbell bench press",
       "author": "wger.de",
+      "license": "CC-BY-SA-3.0",
       "exerciseUrl": "https://wger.de/en/exercise/537/view",
       "sourceUrl": "https://wger.de/media/exercise-video/537/b9c937e9-daeb-42a9-be8e-7a77e368478c.MOV"
     },
@@ -29,6 +31,7 @@
       "file": "/media/exercises/seated-shoulder-press.mp4",
       "title": "Seated dumbbell shoulder press",
       "author": "wger.de",
+      "license": "CC-BY-SA-3.0",
       "exerciseUrl": "https://wger.de/en/exercise/567/view",
       "sourceUrl": "https://wger.de/media/exercise-video/567/64f33c19-1d96-4b7c-af17-6c6a4941c614.MOV"
     },
@@ -37,6 +40,7 @@
       "file": "/media/exercises/dumbbell-curl.mp4",
       "title": "Dumbbell curl",
       "author": "wger.de",
+      "license": "CC-BY-SA-3.0",
       "exerciseUrl": "https://wger.de/en/exercise/92/view",
       "sourceUrl": "https://wger.de/media/exercise-video/92/8bfb917c-3d0d-49b9-8073-5d7e01c1b894.MOV"
     },
@@ -45,6 +49,7 @@
       "file": "/media/exercises/hammer-curl.mp4",
       "title": "Hammer curl",
       "author": "wger.de",
+      "license": "CC-BY-SA-3.0",
       "exerciseUrl": "https://wger.de/en/exercise/272/view",
       "sourceUrl": "https://wger.de/media/exercise-video/272/df069052-2173-4f24-855f-a0eebe729f24.MOV"
     },
@@ -53,6 +58,7 @@
       "file": "/media/exercises/overhead-triceps-extension.mp4",
       "title": "Overhead dumbbell triceps extension",
       "author": "tuninx",
+      "license": "CC-BY-SA-3.0",
       "exerciseUrl": "https://wger.de/en/exercise/211/view",
       "sourceUrl": "https://wger.de/media/exercise-video/211/85f6eb25-a76c-409e-9af9-497794ac0dfb.MOV"
     },
@@ -61,25 +67,36 @@
       "file": "/media/exercises/lateral-raise.mp4",
       "title": "Dumbbell lateral raise",
       "author": "wger.de",
+      "license": "CC-BY-SA-3.0",
       "exerciseUrl": "https://wger.de/en/exercise/348/view",
       "sourceUrl": "https://wger.de/media/exercise-video/348/de69928a-8a35-4096-821c-1f46de5e0e03.MOV"
-    }
-  ],
-  "codeNativeIllustrations": [
+    },
     {
       "slug": "goblet-squat",
-      "title": "Goblet Squat – Start- und Endposition",
-      "source": "Eigene code-native SVG-Illustration; kein externes Asset"
+      "file": "/media/exercises/goblet-squat.mp4",
+      "title": "Kettlebell Goblet Squat",
+      "author": "Taco fleur",
+      "license": "CC-BY-SA-4.0",
+      "sourcePageUrl": "https://commons.wikimedia.org/wiki/File:Kettlebell_Goblet_Squat.webm",
+      "sourceUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c3/Kettlebell_Goblet_Squat.webm"
     },
     {
       "slug": "bent-over-row",
-      "title": "Vorgebeugtes Kurzhantel-Rudern – Start- und Endposition",
-      "source": "Eigene code-native SVG-Illustration; kein externes Asset"
+      "file": "/media/exercises/bent-over-row.mp4",
+      "title": "Bent-over row - exercise demonstration video",
+      "author": "FitnessScape",
+      "license": "CC-BY-3.0",
+      "sourcePageUrl": "https://commons.wikimedia.org/wiki/File:Bent-over_row_-_exercise_demonstration_video.webm",
+      "sourceUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b2/Bent-over_row_-_exercise_demonstration_video.webm"
     },
     {
       "slug": "lying-leg-raise",
-      "title": "Beinheben im Liegen – Start- und Endposition",
-      "source": "Eigene code-native SVG-Illustration; kein externes Asset"
+      "file": "/media/exercises/lying-leg-raise.mp4",
+      "title": "Legraises.gif",
+      "author": "Wensceslao",
+      "license": "CC-BY-SA-4.0",
+      "sourcePageUrl": "https://commons.wikimedia.org/wiki/File:Legraises.gif",
+      "sourceUrl": "https://upload.wikimedia.org/wikipedia/commons/5/50/Legraises.gif"
     }
   ]
 }

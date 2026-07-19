@@ -1,14 +1,28 @@
 import "server-only";
 
 import { sqlite } from "@/db";
-import { DUMBBELL_BAR_WEIGHT_GRAMS } from "@/lib/domain";
+import { buildTrainingPulse, DEFAULT_WEEKLY_TARGET, DUMBBELL_BAR_WEIGHT_GRAMS } from "@/lib/domain";
 import { exerciseMap } from "@/lib/seed";
-import type { PlanCommit, PlanSnapshot, ProgressionSuggestion, SetLog, WorkoutExercise, WorkoutSession } from "@/lib/types";
+import type { BodyWeightEntry, PersonalRecord, PlanCommit, PlanSnapshot, ProgressionSuggestion, ProgressOverview, SetLog, WorkoutExercise, WorkoutSession } from "@/lib/types";
 
 type Row = Record<string, unknown>;
 
 function dateValue(value: unknown): string {
   return new Date(Number(value)).toISOString();
+}
+
+function berlinDateKey(value: Date | number): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(value);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function daysBefore(date: string, amount: number): string {
+  const value = new Date(`${date}T12:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() - amount);
+  return value.toISOString().slice(0, 10);
 }
 
 export function getActivePlan(): PlanCommit {
@@ -110,6 +124,7 @@ export function getSettings() {
     targetWeightGrams: Number(row.target_weight_grams),
     targetDate: String(row.target_date),
     restSeconds: Number(row.rest_seconds),
+    weeklyTarget: Number(row.weekly_target ?? DEFAULT_WEEKLY_TARGET),
     theme: String(row.theme),
   };
 }
@@ -159,13 +174,61 @@ export function getExerciseStats() {
   }));
 }
 
+/** All data needed by the progress journal, kept together so visual components remain presentational. */
+export function getProgressOverview(): ProgressOverview {
+  const settings = getSettings();
+  const today = berlinDateKey(Date.now());
+  const completed = sqlite.prepare(`
+    SELECT completed_at, total_volume_grams
+    FROM workout_session
+    WHERE status = 'completed' AND completed_at IS NOT NULL
+  `).all() as Row[];
+  const pulse = buildTrainingPulse(completed.map((row) => ({
+    completedAt: berlinDateKey(Number(row.completed_at)),
+    totalVolumeGrams: Number(row.total_volume_grams),
+  })), settings.weeklyTarget, today);
+  const earliestWeight = daysBefore(today, 89);
+  const bodyWeights = (sqlite.prepare("SELECT * FROM body_weight_entry ORDER BY measured_at ASC").all() as Row[])
+    .map((row): BodyWeightEntry => ({
+      id: String(row.id), weightGrams: Number(row.weight_grams), measuredAt: dateValue(row.measured_at), note: row.note ? String(row.note) : null,
+    }))
+    .filter((entry) => berlinDateKey(new Date(entry.measuredAt)) >= earliestWeight);
+  const recordRows = sqlite.prepare(`
+    WITH max_loads AS (
+      SELECT we.exercise_key, MAX(sl.weight_grams) AS max_weight
+      FROM set_log sl
+      JOIN workout_exercise we ON we.id = sl.workout_exercise_id
+      JOIN workout_session ws ON ws.id = we.session_id
+      JOIN exercise e ON e.key = we.exercise_key
+      WHERE sl.completed = 1 AND ws.status = 'completed' AND e.dumbbell_count > 0
+      GROUP BY we.exercise_key
+    )
+    SELECT m.exercise_key, m.max_weight, MAX(ws.completed_at) AS achieved_at
+    FROM max_loads m
+    JOIN workout_exercise we ON we.exercise_key = m.exercise_key
+    JOIN workout_session ws ON ws.id = we.session_id AND ws.status = 'completed'
+    JOIN set_log sl ON sl.workout_exercise_id = we.id AND sl.completed = 1 AND sl.weight_grams = m.max_weight
+    GROUP BY m.exercise_key, m.max_weight
+    ORDER BY achieved_at DESC
+    LIMIT 3
+  `).all() as Row[];
+  const records: PersonalRecord[] = recordRows.map((row) => ({
+    exerciseKey: String(row.exercise_key),
+    name: exerciseMap.get(String(row.exercise_key))?.shortName ?? String(row.exercise_key),
+    weightGrams: Number(row.max_weight),
+    achievedAt: dateValue(row.achieved_at),
+  }));
+
+  return { weeklyTarget: settings.weeklyTarget, completedCount: completed.length, bodyWeights, records, ...pulse };
+}
+
 export function getBackupPayload() {
   const state = sqlite.prepare("SELECT * FROM app_state WHERE id = 'singleton'").get() as Row;
   const settings = getSettings();
   const sessionRows = sqlite.prepare("SELECT id FROM workout_session ORDER BY started_at").all() as Row[];
   const suggestionRows = sqlite.prepare("SELECT * FROM progression_suggestion ORDER BY created_at").all() as Row[];
   return {
-    schemaVersion: 2 as const,
+    schemaVersion: 3 as const,
     exportedAt: new Date().toISOString(),
     planVersions: getPlanVersions(10_000).reverse(),
     activePlanVersionId: String(state.active_plan_version_id),

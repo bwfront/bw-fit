@@ -78,6 +78,7 @@ export const ownerSettings = sqliteTable("owner_settings", {
   targetWeightGrams: integer("target_weight_grams").notNull().default(80_000),
   targetDate: text("target_date").notNull().default("2027-07-19"),
   restSeconds: integer("rest_seconds").notNull().default(90),
+  weeklyTarget: integer("weekly_target").notNull().default(2),
   theme: text("theme").notNull().default("system"),
   updatedAt: timestamp("updated_at").notNull(),
 });

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { calculateVolume, diffPlans, eligibleForProgression, formatExerciseLoad, formatKg, resolveVariant, totalExternalLoadGrams, visiblePlanVersions } from "@/lib/domain";
-import { codeNativeExerciseDiagramSlugs, localVideoDemoSlugs } from "@/lib/media";
+import { buildTrainingPulse, calculateVolume, diffPlans, eligibleForProgression, formatExerciseLoad, formatKg, resolveVariant, totalExternalLoadGrams, visiblePlanVersions } from "@/lib/domain";
+import { localVideoDemoSlugs } from "@/lib/media";
 import { applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { initialPlan } from "@/lib/seed";
 import type { PlanCommit, WorkoutExercise } from "@/lib/types";
@@ -42,6 +42,35 @@ describe("Progression", () => {
     expect(eligibleForProgression(exercise)).toBe(true);
     exercise.sets[2].reps = 9;
     expect(eligibleForProgression(exercise)).toBe(false);
+  });
+});
+
+describe("Trainingspuls", () => {
+  it("aggregiert Montag-basierte Wochen, Kalenderfelder und eine erreichte Wochenserie", () => {
+    const pulse = buildTrainingPulse([
+      { completedAt: "2026-07-14", totalVolumeGrams: 400_000 },
+      { completedAt: "2026-07-16", totalVolumeGrams: 500_000 },
+      { completedAt: "2026-07-07", totalVolumeGrams: 300_000 },
+      { completedAt: "2026-07-09", totalVolumeGrams: 300_000 },
+      { completedAt: "2026-06-30", totalVolumeGrams: 100_000 },
+    ], 2, "2026-07-19");
+
+    expect(pulse.weeks).toHaveLength(12);
+    expect(pulse.days).toHaveLength(84);
+    expect(pulse.weeks.at(-1)).toMatchObject({ weekStart: "2026-07-13", sessions: 2, volumeGrams: 900_000, reachedGoal: true, isCurrent: true });
+    expect(pulse.currentSessions).toBe(2);
+    expect(pulse.streak).toBe(2);
+    expect(pulse.days.find((day) => day.date === "2026-07-14")).toMatchObject({ sessions: 1 });
+  });
+
+  it("zählt eine unvollständige laufende Woche nicht zur Serie", () => {
+    const pulse = buildTrainingPulse([
+      { completedAt: "2026-07-15", totalVolumeGrams: 100_000 },
+      { completedAt: "2026-07-07", totalVolumeGrams: 100_000 },
+      { completedAt: "2026-07-09", totalVolumeGrams: 100_000 },
+    ], 2, "2026-07-19");
+    expect(pulse.currentSessions).toBe(1);
+    expect(pulse.streak).toBe(1);
   });
 });
 
@@ -93,18 +122,17 @@ describe("Plan-Historie", () => {
 });
 
 describe("Übungsmedien", () => {
-  it("liefert für jede Übungsvariante ein lokales Video oder Bewegungsdiagramm", () => {
+  it("liefert für jede Übungsvariante ein lokales Video", () => {
     const manifest = JSON.parse(readFileSync(resolve("public/media/ATTRIBUTION.json"), "utf8")) as {
-      assets: Array<{ slug: string; file: string }>;
-      codeNativeIllustrations: Array<{ slug: string; title: string; source: string }>;
+      assets: Array<{ slug: string; file: string; license: string; sourceUrl: string }>;
     };
     expect(manifest.assets.map((asset) => asset.slug).sort()).toEqual([...localVideoDemoSlugs].sort());
     for (const asset of manifest.assets) {
       expect(existsSync(resolve("public", asset.file.replace(/^\//, "")))).toBe(true);
+      expect(asset.license).toMatch(/^CC-BY/);
+      expect(asset.sourceUrl).toMatch(/^https:\/\//);
     }
-    expect(manifest.codeNativeIllustrations.map((item) => item.slug).sort()).toEqual([...codeNativeExerciseDiagramSlugs].sort());
-    expect(manifest.codeNativeIllustrations.every((item) => item.title && item.source.includes("code-native"))).toBe(true);
-    const available = new Set([...manifest.assets.map((asset) => asset.slug), ...manifest.codeNativeIllustrations.map((item) => item.slug)]);
+    const available = new Set(manifest.assets.map((asset) => asset.slug));
     expect(Object.values(initialPlan.exercises).flatMap((entry) => entry.exerciseKeys).every((key) => available.has(key))).toBe(true);
   });
 });

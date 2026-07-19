@@ -66,6 +66,7 @@ export function ensureDatabase(): void {
     CREATE TABLE IF NOT EXISTS owner_settings (
       id TEXT PRIMARY KEY, target_weight_grams INTEGER NOT NULL DEFAULT 80000,
       target_date TEXT NOT NULL DEFAULT '2027-07-19', rest_seconds INTEGER NOT NULL DEFAULT 90,
+      weekly_target INTEGER NOT NULL DEFAULT 2,
       theme TEXT NOT NULL DEFAULT 'system', updated_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS workout_session (
@@ -106,6 +107,10 @@ export function ensureDatabase(): void {
   if (!exerciseColumns.some((column) => column.name === "dumbbell_count")) {
     sqlite.exec("ALTER TABLE exercise ADD COLUMN dumbbell_count INTEGER NOT NULL DEFAULT 0");
   }
+  const settingsColumns = sqlite.prepare("PRAGMA table_info(owner_settings)").all() as Array<{ name: string }>;
+  if (!settingsColumns.some((column) => column.name === "weekly_target")) {
+    sqlite.exec("ALTER TABLE owner_settings ADD COLUMN weekly_target INTEGER NOT NULL DEFAULT 2");
+  }
   const seed = sqlite.transaction(() => {
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (1, 'initial_schema', ?)").run(now);
     const insertExercise = sqlite.prepare(`
@@ -124,8 +129,8 @@ export function ensureDatabase(): void {
       sqlite.prepare("INSERT INTO app_state (id, active_plan_version_id, completed_workout_count) VALUES ('singleton', 'plan-initial', 0)").run();
     }
     sqlite.prepare(`
-      INSERT INTO owner_settings (id, target_weight_grams, target_date, rest_seconds, theme, updated_at)
-      VALUES ('singleton', 80000, '2027-07-19', 90, 'system', ?)
+      INSERT INTO owner_settings (id, target_weight_grams, target_date, rest_seconds, weekly_target, theme, updated_at)
+      VALUES ('singleton', 80000, '2027-07-19', 90, 2, 'system', ?)
       ON CONFLICT(id) DO NOTHING
     `).run(now);
   });
@@ -134,6 +139,7 @@ export function ensureDatabase(): void {
   if (isFreshDatabase) {
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (2, 'plate_weight_model', ?)").run(now);
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (3, 'leg_raise_3x15', ?)").run(now);
+    sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (4, 'weekly_training_target', ?)").run(now);
     return;
   }
 
@@ -186,6 +192,10 @@ export function ensureDatabase(): void {
       }
       sqlite.prepare("INSERT INTO schema_migration (version, name, applied_at) VALUES (3, 'leg_raise_3x15', ?)").run(now);
     })();
+  }
+
+  if (!appliedMigrations.has(4)) {
+    sqlite.prepare("INSERT INTO schema_migration (version, name, applied_at) VALUES (4, 'weekly_training_target', ?)").run(now);
   }
 }
 

@@ -47,7 +47,7 @@ test("mobile first run, workout autosave, timer and bodyweight", async ({ page }
   await expect(page).toHaveURL(/\/training\//);
   await expect(page.getByRole("heading", { name: /Goblet.*Squat/i })).toBeVisible();
 
-  await page.getByRole("button", { name: "Weiter" }).click();
+  await page.getByRole("button", { name: "Nächste Übung" }).click();
   const longHeading = page.getByRole("heading", { name: "Schrägbankdrücken mit Kurzhanteln" });
   await expect(longHeading).toBeVisible();
   for (const width of [320, 360, 390, 412]) {
@@ -57,25 +57,27 @@ test("mobile first run, workout autosave, timer and bodyweight", async ({ page }
     const headingBox = await longHeading.boundingBox();
     expect(headingBox).not.toBeNull();
     expect((headingBox?.x ?? 0) + (headingBox?.width ?? 0)).toBeLessThanOrEqual(width);
-    const nextBox = await page.getByRole("button", { name: "Weiter" }).boundingBox();
+    const nextBox = await page.getByRole("button", { name: "Nächste Übung" }).boundingBox();
     expect(nextBox).not.toBeNull();
     expect((nextBox?.y ?? 0) + (nextBox?.height ?? 0)).toBeLessThanOrEqual(740);
   }
   await page.getByRole("button", { name: "Zurück" }).click();
 
   const firstSet = page.getByRole("button", { name: "Satz 1 abschließen" });
-  await page.locator(".set-row").first().getByText("Notiz hinzufügen").click();
-  await page.getByLabel("Notiz zu Satz 1").fill("Tempo sauber");
+  const focusSet = page.locator(".focus-set");
+  await focusSet.getByText("Notiz hinzufügen").click();
+  await focusSet.getByLabel("Notiz zu Satz 1").fill("Tempo sauber");
   const noteSaved = page.waitForResponse((response) => response.request().method() === "POST" && response.ok());
-  await page.getByLabel("Notiz zu Satz 1").blur();
+  await focusSet.getByLabel("Notiz zu Satz 1").blur();
   await noteSaved;
   const setSaved = page.waitForResponse((response) => response.request().method() === "POST" && response.ok());
   await firstSet.click();
   await setSaved;
   await expect(page.getByText("Pause", { exact: true })).toBeVisible();
   await expect(page.getByText(/1:2\d|1:30/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Satz 2 abschließen" })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Satz 1 öffnen" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Satz 1 öffnen" })).toBeVisible();
   await expect(page.getByLabel("Notiz zu Satz 1")).toHaveValue("Tempo sauber");
 
   await page.getByRole("button", { name: "Technik" }).click();
@@ -88,11 +90,18 @@ test("mobile first run, workout autosave, timer and bodyweight", async ({ page }
   await expect(page.getByRole("link", { name: "Fortsetzen" })).toBeVisible();
 
   await page.getByRole("link", { name: "Fortschritt" }).click();
+  await expect(page.getByRole("heading", { name: "Trainingspuls" })).toBeVisible();
+  await expect(page.getByText("Letzte 12 Wochen")).toBeVisible();
   await page.getByLabel("Gewicht in kg").fill("74.5");
   await page.getByLabel("Notiz (optional)").fill("E2E Messung");
   await page.getByRole("button", { name: "Messung speichern" }).click();
   await expect(page.getByText("74,5 kg")).toBeVisible();
 
+  await page.getByRole("link", { name: "Einstellungen" }).click();
+  await page.getByLabel("Trainingseinheiten pro Woche").fill("3");
+  await page.getByRole("button", { name: "Einstellungen speichern" }).click();
+  await page.getByRole("link", { name: "Fortschritt" }).click();
+  await expect(page.getByText("/3")).toBeVisible();
   await page.getByRole("link", { name: "Einstellungen" }).click();
   await page.getByRole("button", { name: "Dunkel" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");

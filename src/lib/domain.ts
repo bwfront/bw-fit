@@ -1,7 +1,69 @@
 import { exerciseMap } from "@/lib/seed";
-import type { PlanCommit, PlanDiff, PlanSnapshot, WorkoutExercise } from "@/lib/types";
+import type { PlanCommit, PlanDiff, PlanSnapshot, ProgressDay, ProgressWeek, WorkoutExercise } from "@/lib/types";
 
 export const DUMBBELL_BAR_WEIGHT_GRAMS = 2_500;
+export const DEFAULT_WEEKLY_TARGET = 2;
+
+type CompletedWorkoutSummary = { completedAt: string; totalVolumeGrams: number };
+
+function fromDateKey(date: string): Date {
+  return new Date(`${date}T12:00:00.000Z`);
+}
+
+function toDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function shiftDate(date: string, days: number): string {
+  const value = fromDateKey(date);
+  value.setUTCDate(value.getUTCDate() + days);
+  return toDateKey(value);
+}
+
+export function mondayOf(date: string): string {
+  const value = fromDateKey(date);
+  const offset = (value.getUTCDay() + 6) % 7;
+  return shiftDate(date, -offset);
+}
+
+/** Builds the calendar grid and aggregates completed sessions by Monday-based calendar week. */
+export function buildTrainingPulse(workouts: CompletedWorkoutSummary[], weeklyTarget: number, today: string): { weeks: ProgressWeek[]; days: ProgressDay[]; currentSessions: number; streak: number } {
+  const currentWeek = mondayOf(today);
+  const firstWeek = shiftDate(currentWeek, -77);
+  const sessionsByDay = new Map<string, number>();
+  const weeksByStart = new Map<string, { sessions: number; volumeGrams: number }>();
+
+  for (const workout of workouts) {
+    const day = workout.completedAt.slice(0, 10);
+    const weekStart = mondayOf(day);
+    const current = weeksByStart.get(weekStart) ?? { sessions: 0, volumeGrams: 0 };
+    current.sessions += 1;
+    current.volumeGrams += workout.totalVolumeGrams;
+    weeksByStart.set(weekStart, current);
+    sessionsByDay.set(day, (sessionsByDay.get(day) ?? 0) + 1);
+  }
+
+  const weeks = Array.from({ length: 12 }, (_, index) => {
+    const weekStart = shiftDate(firstWeek, index * 7);
+    const values = weeksByStart.get(weekStart) ?? { sessions: 0, volumeGrams: 0 };
+    return { weekStart, ...values, reachedGoal: values.sessions >= weeklyTarget, isCurrent: weekStart === currentWeek };
+  });
+  const days: ProgressDay[] = Array.from({ length: 84 }, (_, index) => {
+    const date = shiftDate(firstWeek, index);
+    return { date, sessions: sessionsByDay.get(date) ?? 0, isToday: date === today };
+  });
+
+  let streak = 0;
+  let cursor = currentWeek;
+  const currentValues = weeksByStart.get(cursor)?.sessions ?? 0;
+  if (currentValues < weeklyTarget) cursor = shiftDate(cursor, -7);
+  while ((weeksByStart.get(cursor)?.sessions ?? 0) >= weeklyTarget) {
+    streak += 1;
+    cursor = shiftDate(cursor, -7);
+  }
+
+  return { weeks, days, currentSessions: weeksByStart.get(currentWeek)?.sessions ?? 0, streak };
+}
 
 export function formatKg(grams: number): string {
   return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(grams / 1000)} kg`;

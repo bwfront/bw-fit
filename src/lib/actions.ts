@@ -227,10 +227,12 @@ export async function updateSettings(formData: FormData) {
   const targetWeight = z.coerce.number().min(30).max(300).parse(formData.get("targetWeightKg"));
   const targetDate = z.string().date().parse(formData.get("targetDate"));
   const restSeconds = z.coerce.number().int().min(15).max(600).parse(formData.get("restSeconds"));
-  sqlite.prepare("UPDATE owner_settings SET target_weight_grams = ?, target_date = ?, rest_seconds = ?, updated_at = ? WHERE id = 'singleton'")
-    .run(Math.round(targetWeight * 1000), targetDate, restSeconds, Date.now());
+  const weeklyTarget = z.coerce.number().int().min(1).max(7).parse(formData.get("weeklyTarget"));
+  sqlite.prepare("UPDATE owner_settings SET target_weight_grams = ?, target_date = ?, rest_seconds = ?, weekly_target = ?, updated_at = ? WHERE id = 'singleton'")
+    .run(Math.round(targetWeight * 1000), targetDate, restSeconds, weeklyTarget, Date.now());
   revalidatePath("/");
   revalidatePath("/einstellungen");
+  revalidatePath("/fortschritt");
 }
 
 export async function importBackup(formData: FormData) {
@@ -238,12 +240,12 @@ export async function importBackup(formData: FormData) {
   const file = formData.get("backup");
   if (!(file instanceof File) || !file.size) throw new Error("Keine Sicherungsdatei ausgewählt.");
   const parsed = z.object({
-    schemaVersion: z.union([z.literal(1), z.literal(2)]),
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     exportedAt: z.string(),
     planVersions: z.array(z.object({ id: z.string(), parentId: z.string().nullable(), message: z.string(), snapshot: snapshotSchema, createdAt: z.string() })),
     activePlanVersionId: z.string(),
     completedWorkoutCount: z.number().int().min(0),
-    settings: z.object({ targetWeightGrams: z.number().int(), targetDate: z.string(), restSeconds: z.number().int(), theme: z.string() }),
+    settings: z.object({ targetWeightGrams: z.number().int(), targetDate: z.string(), restSeconds: z.number().int(), weeklyTarget: z.number().int().min(1).max(7).optional(), theme: z.string() }),
     bodyWeights: z.array(z.object({ id: z.string(), weightGrams: z.number(), measuredAt: z.string(), note: z.string().nullable() })),
     workouts: z.array(z.object({
       id: z.string(), planVersionId: z.string(), status: z.enum(["active", "completed", "cancelled"]),
@@ -276,8 +278,8 @@ export async function importBackup(formData: FormData) {
     }
     sqlite.prepare("INSERT INTO app_state (id, active_plan_version_id, completed_workout_count) VALUES ('singleton', ?, ?)")
       .run(parsed.activePlanVersionId, parsed.completedWorkoutCount);
-    sqlite.prepare("UPDATE owner_settings SET target_weight_grams = ?, target_date = ?, rest_seconds = ?, theme = ?, updated_at = ? WHERE id = 'singleton'")
-      .run(parsed.settings.targetWeightGrams, parsed.settings.targetDate, parsed.settings.restSeconds, parsed.settings.theme, Date.now());
+    sqlite.prepare("UPDATE owner_settings SET target_weight_grams = ?, target_date = ?, rest_seconds = ?, weekly_target = ?, theme = ?, updated_at = ? WHERE id = 'singleton'")
+      .run(parsed.settings.targetWeightGrams, parsed.settings.targetDate, parsed.settings.restSeconds, parsed.settings.weeklyTarget ?? 2, parsed.settings.theme, Date.now());
     for (const entry of parsed.bodyWeights) {
       sqlite.prepare("INSERT INTO body_weight_entry (id, weight_grams, measured_at, note) VALUES (?, ?, ?, ?)")
         .run(entry.id, entry.weightGrams, new Date(entry.measuredAt).getTime(), entry.note);

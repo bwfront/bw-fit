@@ -27,6 +27,7 @@ export default function SettingsPage() {
               <label>Zielgewicht in kg<input name="targetWeightKg" type="number" step="0.1" min="30" max="300" defaultValue={settings.targetWeightGrams / 1000} /></label>
               <label>Zieldatum<input name="targetDate" type="date" defaultValue={settings.targetDate} /></label>
               <label>Standardpause in Sekunden<input name="restSeconds" type="number" step="15" min="15" max="600" defaultValue={settings.restSeconds} /></label>
+              <label>Trainingseinheiten pro Woche<input name="weeklyTarget" type="number" step="1" min="1" max="7" defaultValue={settings.weeklyTarget} /></label>
               <SubmitButton className="button steel">Einstellungen speichern</SubmitButton>
             </form>
           </section>
@@ -46,7 +47,7 @@ export default function SettingsPage() {
           </section>
           <PwaInstallCard />
         </div>
-        <section className="credits"><strong>Übungsmedien</strong><p>Sieben Übungsvarianten verwenden lokal gespeicherte wger-Videos unter CC BY-SA 3.0. Für Goblet Squat, Rudern und Beinheben stehen lokale Bewegungsdiagramme bereit. Herkunft, Autor, Lizenz und Bearbeitung sind in <code>public/media/ATTRIBUTION.json</code> dokumentiert.</p></section>
+        <section className="credits"><strong>Übungsmedien</strong><p>Alle zehn Übungsvarianten verwenden lokal gespeicherte Creative-Commons-Videos. Herkunft, Autor, Lizenz und Bearbeitung sind in <code>public/media/ATTRIBUTION.json</code> dokumentiert.</p></section>
       </main>
     </>
   );

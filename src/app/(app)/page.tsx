@@ -44,7 +44,7 @@ export default function TodayPage() {
           <section className="card metric-card">
             <span className="metric-label">Körpergewicht</span>
             <div className="metric-value">{latestWeight ? formatKg(latestWeight) : "Noch offen"}</div>
-            <p className="metric-sub">Ziel {formatKg(settings.targetWeightGrams)} · 19.07.27</p>
+            <p className="metric-sub">Ziel {formatKg(settings.targetWeightGrams)} · {new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(`${settings.targetDate}T12:00:00`))}</p>
             <div className="goal-track" aria-label={`${goalProgress} Prozent des Zielgewichts`}><span style={{ width: `${goalProgress}%` }} /></div>
           </section>
           <section className="card metric-card orange">
