@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { buildTrainingPulse, calculateVolume, diffPlans, eligibleForProgression, exercisesForSession, formatExerciseLoad, formatKg, resolveSessionVariant, resolveTrainingDay, resolveVariant, totalExternalLoadGrams, visiblePlanVersions } from "@/lib/domain";
+import { buildTrainingPulse, calculateVolume, diffPlans, eligibleForProgression, exercisesForSession, applyTrainingPrescription, formatExerciseLoad, formatKg, propagateSetPrescription, resolveSessionVariant, resolveTrainingDay, resolveVariant, totalExternalLoadGrams, visiblePlanVersions } from "@/lib/domain";
 import { localVideoDemoSlugs } from "@/lib/media";
 import { applyAbSplitPlan, applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { initialPlan } from "@/lib/seed";
@@ -52,6 +52,29 @@ describe("Progression", () => {
     expect(eligibleForProgression(exercise)).toBe(true);
     exercise.sets[2].reps = 9;
     expect(eligibleForProgression(exercise)).toBe(false);
+  });
+
+  it("übernimmt angepasste Werte auf alle folgenden offenen Sätze", () => {
+    const sets = [
+      { id: "1", setNumber: 1, completed: true, weightGrams: 10_000, reps: 12, targetReps: 12 },
+      { id: "2", setNumber: 2, completed: false, weightGrams: 10_000, reps: 12, targetReps: 12 },
+      { id: "3", setNumber: 3, completed: false, weightGrams: 10_000, reps: 8, targetReps: 8 },
+    ];
+    expect(propagateSetPrescription(sets, 2, 12_500, 10)).toEqual([
+      sets[0],
+      sets[1],
+      { ...sets[2], weightGrams: 12_500, reps: 10, targetReps: 10 },
+    ]);
+  });
+
+  it("schreibt die Trainingsvorgabe einheitlich zurück in den Plan", () => {
+    const result = applyTrainingPrescription(initialPlan, "slot-shoulder", 12_500, 10);
+    expect(result.changed).toBe(true);
+    expect(result.snapshot.exercises.find((item) => item.slotId === "slot-shoulder")).toMatchObject({
+      weightGrams: 12_500,
+      sets: [{ reps: 10 }, { reps: 10 }, { reps: 10 }],
+    });
+    expect(applyTrainingPrescription(result.snapshot, "slot-shoulder", 12_500, 10).changed).toBe(false);
   });
 });
 

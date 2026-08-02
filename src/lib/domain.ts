@@ -127,6 +127,37 @@ export function eligibleForProgression(item: WorkoutExercise): boolean {
   return targeted.length > 0 && targeted.every((set) => set.completed && (set.reps ?? 0) >= (set.targetReps ?? 0));
 }
 
+/** Copies weight/reps onto later unfinished sets of the same exercise. */
+export function propagateSetPrescription<T extends { setNumber: number; completed: boolean; weightGrams: number; reps: number | null; targetReps: number | null }>(
+  sets: T[],
+  setNumber: number,
+  weightGrams: number,
+  reps: number,
+): T[] {
+  return sets.map((set) => {
+    if (set.setNumber <= setNumber || set.completed) return set;
+    return { ...set, weightGrams, reps, targetReps: reps };
+  });
+}
+
+/** Applies a performed set as the uniform prescription for a plan slot. */
+export function applyTrainingPrescription(snapshot: PlanSnapshot, slotId: string, weightGrams: number, reps: number): { snapshot: PlanSnapshot; changed: boolean } {
+  const item = snapshot.exercises.find((entry) => entry.slotId === slotId);
+  if (!item) return { snapshot, changed: false };
+  const sameWeight = item.weightGrams === weightGrams;
+  const sameReps = item.sets.length > 0 && item.sets.every((set) => set.reps === reps);
+  if (sameWeight && sameReps) return { snapshot, changed: false };
+  return {
+    changed: true,
+    snapshot: {
+      ...snapshot,
+      exercises: snapshot.exercises.map((entry) => entry.slotId === slotId
+        ? { ...entry, weightGrams, sets: entry.sets.map(() => ({ reps })) }
+        : entry),
+    },
+  };
+}
+
 export function diffPlans(previous: PlanSnapshot, current: PlanSnapshot): PlanDiff[] {
   const previousBySlot = new Map(previous.exercises.map((item) => [item.slotId, item]));
   const currentBySlot = new Map(current.exercises.map((item) => [item.slotId, item]));

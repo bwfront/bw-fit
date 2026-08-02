@@ -45,15 +45,26 @@ export function WorkoutRunner({ initial, restSeconds, previous }: { initial: Wor
     let payload: { setId: string; weightKg: number; reps: number; completed: boolean } | null = null;
     setWorkout((current) => ({
       ...current,
-      exercises: current.exercises.map((entry) => ({
-        ...entry,
-        sets: entry.sets.map((set) => {
-          if (set.id !== setId) return set;
-          const next = { ...set, ...patch };
-          payload = { setId, weightKg: next.weightGrams / 1000, reps: next.reps ?? 0, completed: next.completed };
-          return next;
-        }),
-      })),
+      exercises: current.exercises.map((entry) => {
+        const currentSet = entry.sets.find((set) => set.id === setId);
+        if (!currentSet) return entry;
+        const nextSet = { ...currentSet, ...patch };
+        payload = { setId, weightKg: nextSet.weightGrams / 1000, reps: nextSet.reps ?? 0, completed: nextSet.completed };
+        const propagate = patch.weightGrams !== undefined || patch.reps !== undefined;
+        return {
+          ...entry,
+          sets: entry.sets.map((set) => {
+            if (set.id === setId) return nextSet;
+            if (!propagate || set.setNumber <= currentSet.setNumber || set.completed) return set;
+            return {
+              ...set,
+              weightGrams: nextSet.weightGrams,
+              reps: nextSet.reps,
+              targetReps: nextSet.reps,
+            };
+          }),
+        };
+      }),
     }));
     window.setTimeout(() => {
       if (payload) startTransition(() => updateSet(payload!));

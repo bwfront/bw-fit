@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sqlite } from "@/db";
-import { calculateVolume, DUMBBELL_BAR_WEIGHT_GRAMS, eligibleForProgression, exercisesForSession, planHasTrainingDays, resolveSessionVariant } from "@/lib/domain";
+import { applyTrainingPrescription, calculateVolume, DUMBBELL_BAR_WEIGHT_GRAMS, eligibleForProgression, exercisesForSession, planHasTrainingDays, resolveSessionVariant } from "@/lib/domain";
 import { getActivePlan, getActiveWorkout, getBackupPayload, getWorkoutSession } from "@/lib/data";
 import { applyAbSplitPlan, applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { exerciseMap } from "@/lib/seed";
@@ -42,6 +42,19 @@ function createPlanVersion(snapshot: PlanSnapshot, message: string, parentId?: s
   return id;
 }
 
+function syncPlanFromTraining(slotId: string, weightGrams: number, reps: number, exerciseKey: string) {
+  const plan = getActivePlan();
+  const result = applyTrainingPrescription(plan.snapshot, slotId, weightGrams, reps);
+  if (!result.changed) return;
+  const name = exerciseMap.get(exerciseKey)?.shortName ?? "Übung";
+  const message = `${name} aus Training angepasst`;
+  if (plan.message === message) {
+    sqlite.prepare("UPDATE plan_version SET snapshot_json = ? WHERE id = ?").run(JSON.stringify(result.snapshot), plan.id);
+    return;
+  }
+  createPlanVersion(result.snapshot, message);
+}
+
 export async function startWorkout() {
   await requireOwner();
   const active = getActiveWorkout();
@@ -73,9 +86,44 @@ export async function startWorkout() {
 export async function updateSet(input: z.infer<typeof setUpdateSchema>) {
   await requireOwner();
   const data = setUpdateSchema.parse(input);
-  sqlite.prepare("UPDATE set_log SET weight_grams = ?, reps = ?, completed = ?, updated_at = ? WHERE id = ?")
-    .run(Math.round(data.weightKg * 1000), data.reps, data.completed ? 1 : 0, Date.now(), data.setId);
+  const weightGrams = Math.round(data.weightKg * 1000);
+  const row = sqlite.prepare(`
+    SELECT sl.set_number AS setNumber, sl.weight_grams AS weightGrams, sl.reps AS reps,
+           we.id AS workoutExerciseId, we.slot_id AS slotId, we.exercise_key AS exerciseKey, ws.status AS status
+    FROM set_log sl
+    JOIN workout_exercise we ON we.id = sl.workout_exercise_id
+    JOIN workout_session ws ON ws.id = we.session_id
+    WHERE sl.id = ?
+  `).get(data.setId) as {
+    setNumber: number;
+    weightGrams: number;
+    reps: number | null;
+    workoutExerciseId: string;
+    slotId: string;
+    exerciseKey: string;
+    status: string;
+  } | undefined;
+  if (!row || row.status !== "active") throw new Error("Satz gehört zu keinem aktiven Training.");
+
+  const prescriptionChanged = row.weightGrams !== weightGrams || row.reps !== data.reps;
+  const now = Date.now();
+  sqlite.transaction(() => {
+    sqlite.prepare("UPDATE set_log SET weight_grams = ?, reps = ?, completed = ?, updated_at = ? WHERE id = ?")
+      .run(weightGrams, data.reps, data.completed ? 1 : 0, now, data.setId);
+    if (!prescriptionChanged) return;
+    sqlite.prepare(`
+      UPDATE set_log
+      SET weight_grams = ?, reps = ?, target_reps = ?, updated_at = ?
+      WHERE workout_exercise_id = ? AND set_number > ? AND completed = 0
+    `).run(weightGrams, data.reps, data.reps, now, row.workoutExerciseId, row.setNumber);
+    syncPlanFromTraining(row.slotId, weightGrams, data.reps, row.exerciseKey);
+  })();
   revalidatePath("/training");
+  if (prescriptionChanged) {
+    revalidatePath("/plan");
+    revalidatePath("/");
+    revalidatePath("/verlauf");
+  }
 }
 
 export async function updateSetNote(setId: string, note: string) {
