@@ -11,13 +11,12 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
       DATABASE_PATH: /app/data/kraftbuch.sqlite
       BACKUP_PATH: /app/backups
-      UPLOAD_PATH: /app/uploads
+      UPLOAD_PATH: /app/data/uploads
     ports:
       - "${APP_PORT:-3000}:3000"
     volumes:
       - kraftbuch-data:/app/data
       - kraftbuch-backups:/app/backups
-      - kraftbuch-uploads:/app/uploads
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 30s
@@ -28,4 +27,3 @@ services:
 volumes:
   kraftbuch-data:
   kraftbuch-backups:
-  kraftbuch-uploads:

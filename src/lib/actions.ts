@@ -12,7 +12,7 @@ import { applyAbSplitPlan, applyLegRaiseDefault, legacyWeightToPlateWeight, migr
 import { exerciseMap } from "@/lib/seed";
 import { requireOwner } from "@/lib/session";
 import type { PlanSnapshot } from "@/lib/types";
-import { extensionForMime, isSafeProgressPhotoFileName, PROGRESS_PHOTO_MAX_BYTES, progressPhotoFilePath } from "@/lib/uploads";
+import { isSafeProgressPhotoFileName, PROGRESS_PHOTO_MAX_BYTES, progressPhotoFilePath, resolveProgressPhotoExtension } from "@/lib/uploads";
 
 const setUpdateSchema = z.object({
   setId: z.string().min(1),
@@ -199,31 +199,61 @@ export async function addBodyWeight(formData: FormData) {
   revalidatePath("/fortschritt");
 }
 
-export async function addProgressPhoto(formData: FormData) {
+export async function addProgressPhotos(formData: FormData): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
   await requireOwner();
-  const photo = formData.get("photo");
-  if (!(photo instanceof File) || !photo.size) throw new Error("Kein Foto ausgewählt.");
-  if (photo.size > PROGRESS_PHOTO_MAX_BYTES) throw new Error("Foto ist zu groß (max. 4,5 MB).");
-  const extension = extensionForMime(photo.type);
-  if (!extension) throw new Error("Nur JPEG, PNG oder WebP sind erlaubt.");
+  try {
+    const photos = formData.getAll("photos").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    if (!photos.length) return { ok: false, error: "Kein Foto ausgewählt." };
+    if (photos.length > 12) return { ok: false, error: "Maximal 12 Fotos auf einmal." };
 
-  const noteRaw = formData.get("note");
-  const note = z.string().max(300).catch("").parse(typeof noteRaw === "string" ? noteRaw : "");
-  const workoutRaw = formData.get("workoutSessionId");
-  const workoutSessionId = workoutRaw ? z.string().uuid().parse(workoutRaw) : null;
-  if (workoutSessionId) {
-    const workout = getWorkoutSession(workoutSessionId);
-    if (!workout || workout.status !== "completed") throw new Error("Training für das Foto nicht gefunden.");
+    const noteRaw = formData.get("note");
+    const note = z.string().max(300).catch("").parse(typeof noteRaw === "string" ? noteRaw : "");
+    const workoutRaw = formData.get("workoutSessionId");
+    const workoutSessionId = typeof workoutRaw === "string" && workoutRaw
+      ? z.string().uuid().parse(workoutRaw)
+      : null;
+    if (workoutSessionId) {
+      const workout = getWorkoutSession(workoutSessionId);
+      if (!workout || workout.status !== "completed") return { ok: false, error: "Training für das Foto nicht gefunden." };
+    }
+
+    const insert = sqlite.prepare("INSERT INTO progress_photo (id, file_name, captured_at, note, workout_session_id) VALUES (?, ?, ?, ?, ?)");
+    let saved = 0;
+    for (const photo of photos) {
+      if (photo.size > PROGRESS_PHOTO_MAX_BYTES) {
+        return { ok: false, error: `„${photo.name || "Foto"}“ ist zu groß (max. 8 MB).` };
+      }
+      const bytes = new Uint8Array(await photo.arrayBuffer());
+      const extension = resolveProgressPhotoExtension(photo, bytes);
+      if (!extension) {
+        return { ok: false, error: `„${photo.name || "Foto"}“: nur JPEG, PNG oder WebP sind erlaubt.` };
+      }
+      const id = crypto.randomUUID();
+      const fileName = `${id}.${extension}`;
+      await writeFile(progressPhotoFilePath(fileName), Buffer.from(bytes));
+      insert.run(id, fileName, Date.now(), note.trim() || null, workoutSessionId);
+      saved += 1;
+    }
+
+    revalidatePath("/fortschritt");
+    if (workoutSessionId) revalidatePath(`/training/${workoutSessionId}/abschluss`);
+    return { ok: true, count: saved };
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : "Fotos konnten nicht gespeichert werden.";
+    if (/EACCES|EPERM|EROFS/i.test(message)) {
+      return { ok: false, error: "Kein Schreibzugriff auf den Foto-Ordner. Volume/Rechte prüfen." };
+    }
+    return { ok: false, error: message };
   }
+}
 
-  const id = crypto.randomUUID();
-  const fileName = `${id}.${extension}`;
-  const bytes = Buffer.from(await photo.arrayBuffer());
-  await writeFile(progressPhotoFilePath(fileName), bytes);
-  sqlite.prepare("INSERT INTO progress_photo (id, file_name, captured_at, note, workout_session_id) VALUES (?, ?, ?, ?, ?)")
-    .run(id, fileName, Date.now(), note.trim() || null, workoutSessionId);
-  revalidatePath("/fortschritt");
-  if (workoutSessionId) revalidatePath(`/training/${workoutSessionId}/abschluss`);
+/** @deprecated Use addProgressPhotos */
+export async function addProgressPhoto(formData: FormData) {
+  if (!formData.has("photos") && formData.has("photo")) {
+    const photo = formData.get("photo");
+    if (photo instanceof File) formData.append("photos", photo);
+  }
+  return addProgressPhotos(formData);
 }
 
 export async function deleteProgressPhoto(photoId: string) {

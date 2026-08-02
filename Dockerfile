@@ -18,10 +18,10 @@ ENV NODE_ENV=production \
     PORT=3000 \
     DATABASE_PATH=/app/data/kraftbuch.sqlite \
     BACKUP_PATH=/app/backups \
-    UPLOAD_PATH=/app/uploads
+    UPLOAD_PATH=/app/data/uploads
 
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs \
-    && mkdir -p /app/data /app/backups /app/uploads && chown -R nextjs:nodejs /app
+    && mkdir -p /app/data/uploads /app/backups && chown -R nextjs:nodejs /app
 
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

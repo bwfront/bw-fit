@@ -54,13 +54,12 @@ Versionierte, idempotente Datenbankmigrationen und Seed-Daten laufen beim Contai
 
 ## Sicherung
 
-Die App kann unter **Einstellungen → Daten** eine versionierte JSON-Sicherung exportieren und wieder importieren. Vor einem Import entsteht automatisch eine weitere JSON-Sicherung im Backup-Volume. Die JSON-Sicherung enthält Metadaten zu Fortschrittsfotos; die Bilddateien liegen im Upload-Volume und müssen separat gesichert werden. Für eine vollständige SQLite- und Foto-Sicherung zuerst kurz den Container stoppen und die benannten Volumes sichern:
+Die App kann unter **Einstellungen → Daten** eine versionierte JSON-Sicherung exportieren und wieder importieren. Vor einem Import entsteht automatisch eine weitere JSON-Sicherung im Backup-Volume. Die JSON-Sicherung enthält Metadaten zu Fortschrittsfotos; die Bilddateien liegen unter `UPLOAD_PATH` (standardmäßig im Daten-Volume unter `uploads/`) und werden mit dem SQLite-Volume mitgesichert. Für eine vollständige SQLite-/Foto-Sicherung zuerst kurz den Container stoppen und das Daten-Volume sichern:
 
 ```bash
 docker compose stop kraftbuch
 mkdir -p backups
 docker run --rm -v bw-fit_kraftbuch-data:/source -v "$PWD/backups:/backup" alpine tar czf /backup/kraftbuch-data.tgz -C /source .
-docker run --rm -v bw-fit_kraftbuch-uploads:/source -v "$PWD/backups:/backup" alpine tar czf /backup/kraftbuch-uploads.tgz -C /source .
 docker compose start kraftbuch
 ```
 
@@ -69,12 +68,11 @@ Wiederherstellung aus dieser Sicherung (ersetzt den aktuellen Datenbestand):
 ```bash
 docker compose stop kraftbuch
 docker run --rm -v bw-fit_kraftbuch-data:/target -v "$PWD/backups:/backup:ro" alpine sh -c 'rm -f /target/kraftbuch.sqlite /target/kraftbuch.sqlite-shm /target/kraftbuch.sqlite-wal && tar xzf /backup/kraftbuch-data.tgz -C /target'
-docker run --rm -v bw-fit_kraftbuch-uploads:/target -v "$PWD/backups:/backup:ro" alpine sh -c 'rm -rf /target/* && tar xzf /backup/kraftbuch-uploads.tgz -C /target'
 docker compose start kraftbuch
 curl http://127.0.0.1:${APP_PORT:-3000}/api/health
 ```
 
-Alternativ die Docker-Volumes (`kraftbuch-data`, `kraftbuch-backups` und `kraftbuch-uploads`) in die reguläre Proxmox-VM-Sicherung aufnehmen. Der Compose-Projektpräfix `bw-fit_` hängt vom Verzeichnisnamen ab; `docker volume ls` zeigt die tatsächlichen Namen.
+Alternativ die Docker-Volumes (`kraftbuch-data` und `kraftbuch-backups`) in die reguläre Proxmox-VM-Sicherung aufnehmen. Der Compose-Projektpräfix `bw-fit_` hängt vom Verzeichnisnamen ab; `docker volume ls` zeigt die tatsächlichen Namen.
 
 ## Lokal entwickeln und prüfen
 

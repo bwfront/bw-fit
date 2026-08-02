@@ -3,7 +3,8 @@
 import { Camera, Check, ImagePlus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addProgressPhoto, deleteProgressPhoto } from "@/lib/actions";
+import { addProgressPhotos, deleteProgressPhoto } from "@/lib/actions";
+import { prepareProgressPhotos, type PreparedProgressPhoto } from "@/lib/progress-photo-client";
 import type { ProgressPhoto } from "@/lib/types";
 
 function formatPhotoDate(value: string) {
@@ -14,49 +15,70 @@ export function ProgressPhotoCapture({ workoutSessionId, existingCount = 0 }: { 
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
-  const [preview, setPreview] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [items, setItems] = useState<PreparedProgressPhoto[]>([]);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(existingCount > 0);
+  const [savedCount, setSavedCount] = useState(existingCount);
 
   useEffect(() => () => {
-    if (preview) URL.revokeObjectURL(preview);
-  }, [preview]);
+    for (const item of items) URL.revokeObjectURL(item.previewUrl);
+  }, [items]);
 
-  function onPick(next: File | null) {
-    if (preview) URL.revokeObjectURL(preview);
+  function clearItems() {
+    setItems((current) => {
+      for (const item of current) URL.revokeObjectURL(item.previewUrl);
+      return [];
+    });
+  }
+
+  async function onPick(list: FileList | null) {
+    if (!list?.length) return;
     setError(null);
-    setSaved(false);
-    if (!next) {
-      setFile(null);
-      setPreview(null);
-      return;
+    setPreparing(true);
+    try {
+      const prepared = await prepareProgressPhotos(list);
+      setItems((current) => {
+        for (const item of current) URL.revokeObjectURL(item.previewUrl);
+        return prepared;
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Fotos konnten nicht vorbereitet werden.");
+    } finally {
+      setPreparing(false);
+      if (inputRef.current) inputRef.current.value = "";
     }
-    setFile(next);
-    setPreview(URL.createObjectURL(next));
+  }
+
+  function removeItem(index: number) {
+    setItems((current) => {
+      const next = [...current];
+      const [removed] = next.splice(index, 1);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
   }
 
   function save() {
-    if (!file) {
-      setError("Bitte zuerst ein Foto wählen.");
+    if (!items.length) {
+      setError("Bitte zuerst Fotos wählen.");
       return;
     }
     const data = new FormData();
-    data.set("photo", file);
+    for (const item of items) data.append("photos", item.file);
     if (note.trim()) data.set("note", note.trim());
     if (workoutSessionId) data.set("workoutSessionId", workoutSessionId);
     startTransition(async () => {
-      try {
-        await addProgressPhoto(data);
-        setSaved(true);
-        setError(null);
-        onPick(null);
-        setNote("");
-        router.refresh();
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Foto konnte nicht gespeichert werden.");
+      const result = await addProgressPhotos(data);
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
+      setSavedCount((count) => count + result.count);
+      setError(null);
+      clearItems();
+      setNote("");
+      router.refresh();
     });
   }
 
@@ -65,22 +87,26 @@ export function ProgressPhotoCapture({ workoutSessionId, existingCount = 0 }: { 
       <div className="photo-capture-head">
         <div>
           <span className="metric-label">Bilderbuch</span>
-          <h2>Fortschrittsfoto</h2>
-          <p>{saved ? "Gespeichert. Du kannst noch ein weiteres Foto hinzufügen." : "Optional ein Foto für später speichern."}</p>
+          <h2>Fortschrittsfotos</h2>
+          <p>{savedCount > 0 ? `${savedCount} gespeichert. Weitere Fotos möglich.` : "Ein oder mehrere Fotos für später speichern."}</p>
         </div>
         <Camera size={22} />
       </div>
 
-      {preview ? (
-        <div className="photo-preview">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="Vorschau des Fortschrittsfotos" />
-          <button type="button" className="icon-button mini photo-preview-clear" aria-label="Foto verwerfen" onClick={() => onPick(null)}><X size={16} /></button>
+      {items.length ? (
+        <div className="photo-preview-grid">
+          {items.map((item, index) => (
+            <div className="photo-preview" key={item.previewUrl}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={item.previewUrl} alt={`Vorschau ${index + 1}`} />
+              <button type="button" className="icon-button mini photo-preview-clear" aria-label={`Foto ${index + 1} entfernen`} onClick={() => removeItem(index)}><X size={16} /></button>
+            </div>
+          ))}
         </div>
       ) : (
-        <button type="button" className="photo-pick" onClick={() => inputRef.current?.click()}>
+        <button type="button" className="photo-pick" disabled={preparing || pending} onClick={() => inputRef.current?.click()}>
           <ImagePlus size={22} />
-          <span>Foto aufnehmen oder wählen</span>
+          <span>{preparing ? "Bereitet vor…" : "Fotos aufnehmen oder wählen"}</span>
         </button>
       )}
 
@@ -88,24 +114,28 @@ export function ProgressPhotoCapture({ workoutSessionId, existingCount = 0 }: { 
         ref={inputRef}
         className="sr-only"
         type="file"
-        accept="image/jpeg,image/png,image/webp"
-        capture="environment"
-        onChange={(event) => onPick(event.target.files?.[0] ?? null)}
+        accept="image/*,.heic,.heif"
+        multiple
+        onChange={(event) => void onPick(event.target.files)}
       />
 
-      {file && (
+      {items.length > 0 && (
         <>
-          <label className="photo-note-label">Notiz (optional)
-            <input value={note} onChange={(event) => setNote(event.target.value)} maxLength={300} placeholder="z. B. Front, Licht, Tagesform" />
+          <div className="photo-capture-actions">
+            <button type="button" className="button" disabled={preparing || pending} onClick={() => inputRef.current?.click()}>Weitere wählen</button>
+            <button type="button" className="button" disabled={preparing || pending} onClick={clearItems}>Leeren</button>
+          </div>
+          <label className="photo-note-label">Notiz (optional, für alle)
+            <input value={note} onChange={(event) => setNote(event.target.value)} maxLength={300} placeholder="z. B. Front, Seiten, Licht" />
           </label>
-          <button type="button" className="button steel" disabled={pending} onClick={save}>
-            {pending ? "Speichert…" : <><Check size={16} />Im Bilderbuch speichern</>}
+          <button type="button" className="button steel" disabled={pending || preparing} onClick={save}>
+            {pending ? "Speichert…" : <><Check size={16} />{items.length === 1 ? "1 Foto speichern" : `${items.length} Fotos speichern`}</>}
           </button>
         </>
       )}
 
       {error && <p className="photo-error" role="alert">{error}</p>}
-      {saved && !file && <p className="photo-saved"><Check size={15} />Im Bilderbuch unter Fortschritt</p>}
+      {savedCount > 0 && !items.length && <p className="photo-saved"><Check size={15} />Im Bilderbuch unter Fortschritt</p>}
     </section>
   );
 }
@@ -115,6 +145,7 @@ export function ProgressPhotoBook({ photos }: { photos: ProgressPhoto[] }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const active = photos.find((photo) => photo.id === activeId) ?? null;
+  const activeIndex = active ? photos.findIndex((photo) => photo.id === active.id) : -1;
 
   function remove(id: string) {
     if (!window.confirm("Dieses Fortschrittsfoto wirklich löschen?")) return;
@@ -126,7 +157,7 @@ export function ProgressPhotoBook({ photos }: { photos: ProgressPhoto[] }) {
   }
 
   if (!photos.length) {
-    return <div className="empty-card">Nach dem Training kannst du ein Foto speichern. Hier entsteht dann dein Bilderbuch.</div>;
+    return <div className="empty-card">Nach dem Training kannst du Fotos speichern. Hier entsteht dann dein Bilderbuch.</div>;
   }
 
   return (
@@ -146,7 +177,7 @@ export function ProgressPhotoBook({ photos }: { photos: ProgressPhoto[] }) {
           <div className="photo-dialog-sheet">
             <div className="photo-dialog-head">
               <div>
-                <span className="eyebrow">Fortschrittsfoto</span>
+                <span className="eyebrow">Fortschrittsfoto {activeIndex + 1}/{photos.length}</span>
                 <h2>{formatPhotoDate(active.capturedAt)}</h2>
                 {active.note && <p>{active.note}</p>}
               </div>
@@ -154,6 +185,10 @@ export function ProgressPhotoBook({ photos }: { photos: ProgressPhoto[] }) {
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`/api/progress-photos/${active.id}`} alt={`Fortschrittsfoto vom ${formatPhotoDate(active.capturedAt)}`} />
+            <div className="photo-dialog-nav">
+              <button type="button" className="button" disabled={activeIndex <= 0} onClick={() => setActiveId(photos[activeIndex - 1]?.id ?? null)}>Zurück</button>
+              <button type="button" className="button" disabled={activeIndex >= photos.length - 1} onClick={() => setActiveId(photos[activeIndex + 1]?.id ?? null)}>Weiter</button>
+            </div>
             <button type="button" className="button" disabled={pending} onClick={() => remove(active.id)}>
               <Trash2 size={16} />{pending ? "Löscht…" : "Foto löschen"}
             </button>
