@@ -2,7 +2,7 @@ import { ArrowRight, Check, History, Play, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { applySuggestion, dismissSuggestion, startWorkout } from "@/lib/actions";
-import { formatExerciseLoad, formatKg, resolveVariant } from "@/lib/domain";
+import { exercisesForSession, formatExerciseLoad, formatKg, planHasTrainingDays, resolveSessionVariant, resolveTrainingDay } from "@/lib/domain";
 import { getActivePlan, getActiveWorkout, getBodyWeights, getCompletedWorkoutCount, getPendingSuggestions, getRecentWorkouts, getSettings } from "@/lib/data";
 import { exerciseMap } from "@/lib/seed";
 
@@ -18,7 +18,13 @@ export default function TodayPage() {
   const weights = getBodyWeights(1);
   const settings = getSettings();
   const suggestions = getPendingSuggestions();
-  const nextVariants = plan.snapshot.exercises.filter((item) => item.variantMode === "alternate").map((item) => exerciseMap.get(resolveVariant(item.exerciseKeys, count))?.shortName).filter(Boolean);
+  const hasDays = planHasTrainingDays(plan.snapshot);
+  const trainingDay = hasDays ? resolveTrainingDay(count) : null;
+  const sessionExercises = exercisesForSession(plan.snapshot, count);
+  const sessionLabels = sessionExercises.map((item) => {
+    const key = resolveSessionVariant(item.exerciseKeys, count, hasDays);
+    return exerciseMap.get(key)?.shortName ?? "Übung";
+  });
   const latestWeight = weights[0]?.weightGrams;
   const goalProgress = latestWeight ? Math.min(100, Math.round((latestWeight / settings.targetWeightGrams) * 100)) : 0;
 
@@ -28,9 +34,12 @@ export default function TodayPage() {
       <main>
         <p className="eyebrow">Sonntag · Trainingszyklus {String(count + 1).padStart(2, "0")}</p>
         <section className="hero-workout">
-          <div className="hero-top"><span className="status-tag">{activeWorkout ? "Training läuft" : "Plan bereit"}</span><span className="hero-count">8 Übungen</span></div>
-          <h1>{activeWorkout ? "Training fortsetzen" : "Heutiges Training"}</h1>
-          <p className="variant">Heute: {nextVariants.join(" · ")}</p>
+          <div className="hero-top">
+            <span className="status-tag">{activeWorkout ? "Training läuft" : trainingDay ? `Tag ${trainingDay}` : "Plan bereit"}</span>
+            <span className="hero-count">{sessionExercises.length} Übungen</span>
+          </div>
+          <h1>{activeWorkout ? "Training fortsetzen" : trainingDay ? `Tag ${trainingDay}` : "Heutiges Training"}</h1>
+          <p className="variant">Heute: {sessionLabels.join(" · ")}</p>
           <div className="hero-actions">
             {activeWorkout ? (
               <Link className="button resume" href={`/training/${activeWorkout.id}`}><Play size={18} fill="currentColor" />Fortsetzen</Link>
@@ -70,7 +79,7 @@ export default function TodayPage() {
         <div className="section-head"><h2 className="section-title">Dein Plan</h2><Link href="/plan">Bearbeiten <ArrowRight size={14} /></Link></div>
         <section className="card card-pad plan-glance">
           <div><span className="pill"><History size={12} />Version {plan.id.slice(0, 7)}</span><h3>{plan.snapshot.name}</h3><p>{plan.snapshot.goal}</p></div>
-          <div className="plan-sequence">{plan.snapshot.exercises.map((item, index) => <span key={item.slotId}>{String(index + 1).padStart(2, "0")}</span>)}</div>
+          <div className="plan-sequence">{sessionExercises.map((item, index) => <span key={item.slotId}>{String(index + 1).padStart(2, "0")}</span>)}</div>
         </section>
       </main>
     </>

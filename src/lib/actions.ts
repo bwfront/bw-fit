@@ -6,9 +6,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sqlite } from "@/db";
-import { calculateVolume, DUMBBELL_BAR_WEIGHT_GRAMS, eligibleForProgression } from "@/lib/domain";
+import { calculateVolume, DUMBBELL_BAR_WEIGHT_GRAMS, eligibleForProgression, exercisesForSession, planHasTrainingDays, resolveSessionVariant } from "@/lib/domain";
 import { getActivePlan, getActiveWorkout, getBackupPayload, getWorkoutSession } from "@/lib/data";
-import { applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
+import { applyAbSplitPlan, applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { exerciseMap } from "@/lib/seed";
 import { requireOwner } from "@/lib/session";
 import type { PlanSnapshot } from "@/lib/types";
@@ -25,6 +25,7 @@ const snapshotSchema = z.object({
   goal: z.string(),
   exercises: z.array(z.object({
     slotId: z.string(),
+    day: z.enum(["A", "B"]).optional(),
     exerciseKeys: z.array(z.string()).min(1),
     variantMode: z.enum(["fixed", "alternate"]),
     weightGrams: z.number().int().min(0),
@@ -48,6 +49,9 @@ export async function startWorkout() {
 
   const plan = getActivePlan();
   const state = sqlite.prepare("SELECT completed_workout_count AS count FROM app_state WHERE id = 'singleton'").get() as { count: number };
+  const hasDays = planHasTrainingDays(plan.snapshot);
+  const sessionExercises = exercisesForSession(plan.snapshot, state.count);
+  if (!sessionExercises.length) throw new Error("Für diesen Trainingstag sind keine Übungen hinterlegt.");
   const id = crypto.randomUUID();
   const now = Date.now();
   const transaction = sqlite.transaction(() => {
@@ -55,8 +59,8 @@ export async function startWorkout() {
       .run(id, plan.id, now);
     const addExercise = sqlite.prepare("INSERT INTO workout_exercise (id, session_id, exercise_key, slot_id, position, skipped) VALUES (?, ?, ?, ?, ?, 0)");
     const addSet = sqlite.prepare("INSERT INTO set_log (id, workout_exercise_id, set_number, target_reps, weight_grams, reps, completed, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)");
-    plan.snapshot.exercises.forEach((item, position) => {
-      const exerciseKey = item.exerciseKeys[state.count % item.exerciseKeys.length];
+    sessionExercises.forEach((item, position) => {
+      const exerciseKey = resolveSessionVariant(item.exerciseKeys, state.count, hasDays);
       const workoutExerciseId = crypto.randomUUID();
       addExercise.run(workoutExerciseId, id, exerciseKey, item.slotId, position);
       item.sets.forEach((set, setIndex) => addSet.run(crypto.randomUUID(), workoutExerciseId, setIndex + 1, set.reps, item.weightGrams, set.reps, now));
@@ -178,6 +182,9 @@ export async function movePlanSlot(slotId: string, direction: -1 | 1) {
   const index = plan.snapshot.exercises.findIndex((item) => item.slotId === slotId);
   const target = index + direction;
   if (index < 0 || target < 0 || target >= plan.snapshot.exercises.length) return;
+  const current = plan.snapshot.exercises[index];
+  const neighbor = plan.snapshot.exercises[target];
+  if ((current.day ?? null) !== (neighbor.day ?? null)) return;
   const exercises = [...plan.snapshot.exercises];
   [exercises[index], exercises[target]] = [exercises[target], exercises[index]];
   sqlite.transaction(() => createPlanVersion({ ...plan.snapshot, exercises }, "Reihenfolge geändert"))();
@@ -273,6 +280,7 @@ export async function importBackup(formData: FormData) {
     for (const version of parsed.planVersions) {
       let snapshot = parsed.schemaVersion === 1 ? migrateLegacyPlanWeights(version.snapshot) : version.snapshot;
       if (parsed.schemaVersion === 1 && version.id === parsed.activePlanVersionId) snapshot = applyLegRaiseDefault(snapshot).snapshot;
+      if (version.id === parsed.activePlanVersionId) snapshot = applyAbSplitPlan(snapshot).snapshot;
       sqlite.prepare(`INSERT INTO plan_version (id, parent_id, message, snapshot_json, created_at) VALUES (?, ?, ?, ?, ?)`)
         .run(version.id, version.parentId, version.message, JSON.stringify(snapshot), new Date(version.createdAt).getTime());
     }

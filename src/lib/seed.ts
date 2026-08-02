@@ -105,16 +105,14 @@ export const exercises: Exercise[] = [
 
 export const initialPlan: PlanSnapshot = {
   name: "Trainingsplan Sommer 2027",
-  goal: "Massiver Aufbau · ca. 80 kg definiert",
+  goal: "Massiver Aufbau · Tag A/B · ca. 80 kg definiert",
   exercises: [
-    { slotId: "slot-squat", exerciseKeys: ["goblet-squat"], variantMode: "fixed", weightGrams: 17_500, sets: [{ reps: 10 }, { reps: 10 }, { reps: 10 }] },
-    { slotId: "slot-bench", exerciseKeys: ["incline-bench-press", "flat-bench-press"], variantMode: "alternate", weightGrams: 10_000, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
-    { slotId: "slot-row", exerciseKeys: ["bent-over-row"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
-    { slotId: "slot-shoulder", exerciseKeys: ["seated-shoulder-press"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 8 }] },
-    { slotId: "slot-curl", exerciseKeys: ["dumbbell-curl", "hammer-curl"], variantMode: "alternate", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 7 }] },
-    { slotId: "slot-triceps", exerciseKeys: ["overhead-triceps-extension"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 10 }] },
-    { slotId: "slot-lateral", exerciseKeys: ["lateral-raise"], variantMode: "fixed", weightGrams: 2_500, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
-    { slotId: "slot-leg-raise", exerciseKeys: ["lying-leg-raise"], variantMode: "fixed", weightGrams: 0, sets: [{ reps: 15 }, { reps: 15 }, { reps: 15 }] },
+    { slotId: "slot-bench", day: "A", exerciseKeys: ["incline-bench-press", "flat-bench-press"], variantMode: "alternate", weightGrams: 10_000, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
+    { slotId: "slot-row", day: "A", exerciseKeys: ["bent-over-row"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
+    { slotId: "slot-shoulder", day: "A", exerciseKeys: ["seated-shoulder-press"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 8 }] },
+    { slotId: "slot-leg-raise", day: "B", exerciseKeys: ["lying-leg-raise"], variantMode: "fixed", weightGrams: 0, sets: [{ reps: 15 }, { reps: 15 }, { reps: 15 }] },
+    { slotId: "slot-squat", day: "B", exerciseKeys: ["goblet-squat"], variantMode: "fixed", weightGrams: 17_500, sets: [{ reps: 10 }, { reps: 10 }, { reps: 10 }] },
+    { slotId: "slot-curl", day: "B", exerciseKeys: ["dumbbell-curl", "hammer-curl"], variantMode: "alternate", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 7 }] },
   ],
 };
 

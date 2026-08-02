@@ -1,5 +1,5 @@
 import { exerciseMap } from "@/lib/seed";
-import type { PlanCommit, PlanDiff, PlanSnapshot, ProgressDay, ProgressWeek, WorkoutExercise } from "@/lib/types";
+import type { PlanCommit, PlanDiff, PlanExercise, PlanSnapshot, ProgressDay, ProgressWeek, TrainingDay, WorkoutExercise } from "@/lib/types";
 
 export const DUMBBELL_BAR_WEIGHT_GRAMS = 2_500;
 export const DEFAULT_WEEKLY_TARGET = 2;
@@ -86,6 +86,30 @@ export function resolveVariant(keys: string[], completedWorkoutCount: number): s
   return keys[completedWorkoutCount % keys.length];
 }
 
+export function planHasTrainingDays(snapshot: PlanSnapshot): boolean {
+  return snapshot.exercises.some((item) => item.day === "A" || item.day === "B");
+}
+
+export function resolveTrainingDay(completedWorkoutCount: number): TrainingDay {
+  return completedWorkoutCount % 2 === 0 ? "A" : "B";
+}
+
+/** Variant index advances once per visit of that training day when A/B split is active. */
+export function resolveSessionVariant(keys: string[], completedWorkoutCount: number, hasTrainingDays: boolean): string {
+  const visits = hasTrainingDays ? Math.floor(completedWorkoutCount / 2) : completedWorkoutCount;
+  return resolveVariant(keys, visits);
+}
+
+export function exercisesForSession(snapshot: PlanSnapshot, completedWorkoutCount: number): PlanExercise[] {
+  if (!planHasTrainingDays(snapshot)) return snapshot.exercises;
+  const day = resolveTrainingDay(completedWorkoutCount);
+  return snapshot.exercises.filter((item) => item.day === day);
+}
+
+export function exercisesForDay(snapshot: PlanSnapshot, day: TrainingDay): PlanExercise[] {
+  return snapshot.exercises.filter((item) => item.day === day);
+}
+
 export function calculateVolume(exerciseKey: string, plateWeightGrams: number, reps: number): number {
   return totalExternalLoadGrams(exerciseKey, plateWeightGrams) * reps;
 }
@@ -122,6 +146,9 @@ export function diffPlans(previous: PlanSnapshot, current: PlanSnapshot): PlanDi
       const afterReps = after.sets.map((set) => set.reps ?? "frei").join("/");
       if (beforeReps !== afterReps) changes.push(`${beforeReps} → ${afterReps} Wdh.`);
       if (before.exerciseKeys.join() !== after.exerciseKeys.join()) changes.push("Variante geändert");
+      if ((before.day ?? null) !== (after.day ?? null)) {
+        changes.push(after.day ? `Tag ${after.day}` : "Trainingstag entfernt");
+      }
     }
     if (changes.length) diffs.push({ slotId, exerciseName: exerciseMap.get(key)?.shortName ?? "Übung", changes });
   }

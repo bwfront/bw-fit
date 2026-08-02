@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { buildTrainingPulse, calculateVolume, diffPlans, eligibleForProgression, formatExerciseLoad, formatKg, resolveVariant, totalExternalLoadGrams, visiblePlanVersions } from "@/lib/domain";
+import { buildTrainingPulse, calculateVolume, diffPlans, eligibleForProgression, exercisesForSession, formatExerciseLoad, formatKg, resolveSessionVariant, resolveTrainingDay, resolveVariant, totalExternalLoadGrams, visiblePlanVersions } from "@/lib/domain";
 import { localVideoDemoSlugs } from "@/lib/media";
-import { applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
+import { applyAbSplitPlan, applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { initialPlan } from "@/lib/seed";
-import type { PlanCommit, WorkoutExercise } from "@/lib/types";
+import type { PlanCommit, PlanSnapshot, WorkoutExercise } from "@/lib/types";
 
 describe("Gewichte und Volumen", () => {
   it("formatiert Kilogramm und erklärt Scheiben- sowie Gesamtgewicht", () => {
@@ -30,6 +30,16 @@ describe("Varianten", () => {
     expect(resolveVariant(keys, 0)).toBe("incline-bench-press");
     expect(resolveVariant(keys, 1)).toBe("flat-bench-press");
     expect(resolveVariant(keys, 2)).toBe("incline-bench-press");
+  });
+
+  it("wechselt im A/B-Split erst nach dem nächsten Besuch desselben Tags", () => {
+    const keys = ["incline-bench-press", "flat-bench-press"];
+    expect(resolveTrainingDay(0)).toBe("A");
+    expect(resolveTrainingDay(1)).toBe("B");
+    expect(resolveSessionVariant(keys, 0, true)).toBe("incline-bench-press");
+    expect(resolveSessionVariant(keys, 2, true)).toBe("flat-bench-press");
+    expect(exercisesForSession(initialPlan, 0).map((item) => item.slotId)).toEqual(["slot-bench", "slot-row", "slot-shoulder"]);
+    expect(exercisesForSession(initialPlan, 1).map((item) => item.slotId)).toEqual(["slot-leg-raise", "slot-squat", "slot-curl"]);
   });
 });
 
@@ -77,17 +87,18 @@ describe("Trainingspuls", () => {
 describe("Plan-Historie", () => {
   it("beschreibt Gewichts- und Wiederholungsänderungen", () => {
     const next = structuredClone(initialPlan);
-    next.exercises[0].weightGrams = 20_000;
-    next.exercises[0].sets = [{ reps: 12 }, { reps: 12 }, { reps: 12 }];
+    next.exercises[0].weightGrams = 12_500;
+    next.exercises[0].sets = [{ reps: 10 }, { reps: 10 }, { reps: 10 }];
     const diff = diffPlans(initialPlan, next);
-    expect(diff[0].changes).toContain("17,5 kg Scheiben/Hantel · 20 kg gesamt → 20 kg Scheiben/Hantel · 22,5 kg gesamt");
-    expect(diff[0].changes).toContain("10/10/10 → 12/12/12 Wdh.");
+    expect(diff[0].changes).toContain("10 kg Scheiben/Hantel · 25 kg gesamt → 12,5 kg Scheiben/Hantel · 30 kg gesamt");
+    expect(diff[0].changes).toContain("12/12/12 → 10/10/10 Wdh.");
   });
 
-  it("enthält die acht vereinbarten Planpositionen", () => {
-    expect(initialPlan.exercises).toHaveLength(8);
-    expect(initialPlan.exercises.at(-1)?.exerciseKeys).toEqual(["lying-leg-raise"]);
-    expect(initialPlan.exercises.at(-1)?.sets.map((set) => set.reps)).toEqual([15, 15, 15]);
+  it("enthält die sechs vereinbarten Planpositionen als Tag A/B", () => {
+    expect(initialPlan.exercises).toHaveLength(6);
+    expect(initialPlan.exercises.filter((item) => item.day === "A").map((item) => item.slotId)).toEqual(["slot-bench", "slot-row", "slot-shoulder"]);
+    expect(initialPlan.exercises.filter((item) => item.day === "B").map((item) => item.slotId)).toEqual(["slot-leg-raise", "slot-squat", "slot-curl"]);
+    expect(initialPlan.exercises.find((item) => item.slotId === "slot-leg-raise")?.sets.map((set) => set.reps)).toEqual([15, 15, 15]);
   });
 
   it("blendet reine Reihenfolgeversionen aus, ohne die gespeicherte Kette zu verändern", () => {
@@ -148,12 +159,42 @@ describe("Datenmigrationen", () => {
 
   it("setzt nur den unveränderten freien Beinheben-Standard auf 3 x 15", () => {
     const legacy = structuredClone(initialPlan);
-    legacy.exercises.at(-1)!.sets = [{ reps: null }, { reps: null }, { reps: null }];
-    expect(applyLegRaiseDefault(legacy).snapshot.exercises.at(-1)?.sets.map((set) => set.reps)).toEqual([15, 15, 15]);
+    const legRaise = legacy.exercises.find((item) => item.slotId === "slot-leg-raise")!;
+    legRaise.sets = [{ reps: null }, { reps: null }, { reps: null }];
+    expect(applyLegRaiseDefault(legacy).snapshot.exercises.find((item) => item.slotId === "slot-leg-raise")?.sets.map((set) => set.reps)).toEqual([15, 15, 15]);
 
-    legacy.exercises.at(-1)!.sets = [{ reps: 12 }, { reps: null }, { reps: null }];
+    legRaise.sets = [{ reps: 12 }, { reps: null }, { reps: null }];
     const customized = applyLegRaiseDefault(legacy);
     expect(customized.changed).toBe(false);
-    expect(customized.snapshot.exercises.at(-1)?.sets.map((set) => set.reps)).toEqual([12, null, null]);
+    expect(customized.snapshot.exercises.find((item) => item.slotId === "slot-leg-raise")?.sets.map((set) => set.reps)).toEqual([12, null, null]);
+  });
+
+  it("migriert den Full-Body-Plan auf Tag A/B und behält Gewichte sowie Sätze", () => {
+    const legacy: PlanSnapshot = {
+      name: "Trainingsplan Sommer 2027",
+      goal: "Massiver Aufbau · ca. 80 kg definiert",
+      exercises: [
+        { slotId: "slot-squat", exerciseKeys: ["goblet-squat"], variantMode: "fixed", weightGrams: 20_000, sets: [{ reps: 8 }, { reps: 8 }, { reps: 8 }] },
+        { slotId: "slot-bench", exerciseKeys: ["incline-bench-press", "flat-bench-press"], variantMode: "alternate", weightGrams: 12_500, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
+        { slotId: "slot-row", exerciseKeys: ["bent-over-row"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
+        { slotId: "slot-shoulder", exerciseKeys: ["seated-shoulder-press"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 8 }] },
+        { slotId: "slot-curl", exerciseKeys: ["dumbbell-curl", "hammer-curl"], variantMode: "alternate", weightGrams: 7_500, sets: [{ reps: 10 }, { reps: 10 }, { reps: 7 }] },
+        { slotId: "slot-triceps", exerciseKeys: ["overhead-triceps-extension"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 10 }] },
+        { slotId: "slot-lateral", exerciseKeys: ["lateral-raise"], variantMode: "fixed", weightGrams: 2_500, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
+        { slotId: "slot-leg-raise", exerciseKeys: ["lying-leg-raise"], variantMode: "fixed", weightGrams: 0, sets: [{ reps: 15 }, { reps: 15 }, { reps: 15 }] },
+      ],
+    };
+    const migrated = applyAbSplitPlan(legacy);
+    expect(migrated.changed).toBe(true);
+    expect(migrated.snapshot.exercises.map((item) => item.slotId)).toEqual([
+      "slot-bench", "slot-row", "slot-shoulder", "slot-leg-raise", "slot-squat", "slot-curl",
+    ]);
+    expect(migrated.snapshot.exercises.find((item) => item.slotId === "slot-squat")).toMatchObject({
+      day: "B", weightGrams: 20_000, sets: [{ reps: 8 }, { reps: 8 }, { reps: 8 }],
+    });
+    expect(migrated.snapshot.exercises.find((item) => item.slotId === "slot-bench")?.weightGrams).toBe(12_500);
+    expect(migrated.snapshot.exercises.find((item) => item.slotId === "slot-curl")?.weightGrams).toBe(7_500);
+    expect(migrated.snapshot.goal).toContain("Tag A/B");
+    expect(applyAbSplitPlan(migrated.snapshot).changed).toBe(false);
   });
 });

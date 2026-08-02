@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DUMBBELL_BAR_WEIGHT_GRAMS } from "@/lib/domain";
-import { applyLegRaiseDefault, migrateLegacyPlanWeights } from "@/lib/migrations";
+import { applyAbSplitPlan, applyLegRaiseDefault, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { exercises, initialPlan } from "@/lib/seed";
 import type { PlanSnapshot } from "@/lib/types";
 import * as schema from "@/db/schema";
@@ -140,6 +140,7 @@ export function ensureDatabase(): void {
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (2, 'plate_weight_model', ?)").run(now);
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (3, 'leg_raise_3x15', ?)").run(now);
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (4, 'weekly_training_target', ?)").run(now);
+    sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (5, 'ab_split_plan', ?)").run(now);
     return;
   }
 
@@ -196,6 +197,31 @@ export function ensureDatabase(): void {
 
   if (!appliedMigrations.has(4)) {
     sqlite.prepare("INSERT INTO schema_migration (version, name, applied_at) VALUES (4, 'weekly_training_target', ?)").run(now);
+  }
+
+  if (!appliedMigrations.has(5)) {
+    sqlite.transaction(() => {
+      const active = sqlite.prepare(`
+        SELECT p.id, p.snapshot_json FROM plan_version p
+        JOIN app_state a ON a.active_plan_version_id = p.id
+        WHERE a.id = 'singleton'
+      `).get() as { id: string; snapshot_json: string } | undefined;
+      if (active) {
+        const result = applyAbSplitPlan(JSON.parse(active.snapshot_json) as PlanSnapshot);
+        if (result.changed) {
+          const id = crypto.randomUUID();
+          sqlite.prepare("INSERT INTO plan_version (id, parent_id, message, snapshot_json, created_at) VALUES (?, ?, ?, ?, ?)")
+            .run(id, active.id, "Trainingsplan auf Tag A/B umgestellt", JSON.stringify(result.snapshot), now);
+          sqlite.prepare("UPDATE app_state SET active_plan_version_id = ? WHERE id = 'singleton'").run(id);
+          sqlite.prepare(`
+            UPDATE progression_suggestion
+            SET status = 'dismissed'
+            WHERE status = 'pending' AND slot_id IN ('slot-triceps', 'slot-lateral')
+          `).run();
+        }
+      }
+      sqlite.prepare("INSERT INTO schema_migration (version, name, applied_at) VALUES (5, 'ab_split_plan', ?)").run(now);
+    })();
   }
 }
 

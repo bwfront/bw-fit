@@ -13,8 +13,12 @@ export type PlanSetTarget = {
   reps: number | null;
 };
 
+export type TrainingDay = "A" | "B";
+
 export type PlanExercise = {
   slotId: string;
+  /** Trainingstag im A/B-Split; ältere Planversionen können das Feld noch fehlen. */
+  day?: TrainingDay;
   exerciseKeys: string[];
   variantMode: "fixed" | "alternate";
   /** Scheibengewicht je Hantel; das Stangengewicht wird separat berechnet. */

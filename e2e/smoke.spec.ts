@@ -45,10 +45,10 @@ test("mobile first run, workout autosave, timer and bodyweight", async ({ page }
 
   await page.getByRole("button", { name: "Training starten" }).click();
   await expect(page).toHaveURL(/\/training\//);
-  await expect(page.getByRole("heading", { name: /Goblet.*Squat/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Schrägbankdrücken/i })).toBeVisible();
 
   await page.getByRole("button", { name: "Nächste Übung" }).click();
-  const longHeading = page.getByRole("heading", { name: "Schrägbankdrücken mit Kurzhanteln" });
+  const longHeading = page.getByRole("heading", { name: "Vorgebeugtes Kurzhantel-Rudern" });
   await expect(longHeading).toBeVisible();
   for (const width of [320, 360, 390, 412]) {
     await page.setViewportSize({ width, height: 740 });
@@ -82,7 +82,7 @@ test("mobile first run, workout autosave, timer and bodyweight", async ({ page }
 
   await page.getByRole("button", { name: "Technik" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByRole("img", { name: /Goblet Squat: aufrecht stehen/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Schrägbank" })).toBeVisible();
   await page.getByRole("button", { name: "Schließen", exact: true }).click();
 
   await page.getByRole("link", { name: "Training verlassen" }).click();
