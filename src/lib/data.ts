@@ -140,37 +140,49 @@ export function getBodyWeights(limit = 50) {
 }
 
 export function getProgressPhotos(limit = 200): ProgressPhoto[] {
-  const rows = sqlite.prepare("SELECT * FROM progress_photo ORDER BY captured_at DESC LIMIT ?").all(limit) as Row[];
-  return rows.map((row) => ({
-    id: String(row.id),
-    fileName: String(row.file_name),
-    capturedAt: dateValue(row.captured_at),
-    note: row.note ? String(row.note) : null,
-    workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
-  }));
+  try {
+    const rows = sqlite.prepare("SELECT * FROM progress_photo ORDER BY captured_at DESC LIMIT ?").all(limit) as Row[];
+    return rows.map((row) => ({
+      id: String(row.id),
+      fileName: String(row.file_name),
+      capturedAt: dateValue(row.captured_at),
+      note: row.note ? String(row.note) : null,
+      workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export function getProgressPhoto(id: string): ProgressPhoto | null {
-  const row = sqlite.prepare("SELECT * FROM progress_photo WHERE id = ?").get(id) as Row | undefined;
-  if (!row) return null;
-  return {
-    id: String(row.id),
-    fileName: String(row.file_name),
-    capturedAt: dateValue(row.captured_at),
-    note: row.note ? String(row.note) : null,
-    workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
-  };
+  try {
+    const row = sqlite.prepare("SELECT * FROM progress_photo WHERE id = ?").get(id) as Row | undefined;
+    if (!row) return null;
+    return {
+      id: String(row.id),
+      fileName: String(row.file_name),
+      capturedAt: dateValue(row.captured_at),
+      note: row.note ? String(row.note) : null,
+      workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function getProgressPhotosForWorkout(workoutSessionId: string): ProgressPhoto[] {
-  const rows = sqlite.prepare("SELECT * FROM progress_photo WHERE workout_session_id = ? ORDER BY captured_at DESC").all(workoutSessionId) as Row[];
-  return rows.map((row) => ({
-    id: String(row.id),
-    fileName: String(row.file_name),
-    capturedAt: dateValue(row.captured_at),
-    note: row.note ? String(row.note) : null,
-    workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
-  }));
+  try {
+    const rows = sqlite.prepare("SELECT * FROM progress_photo WHERE workout_session_id = ? ORDER BY captured_at DESC").all(workoutSessionId) as Row[];
+    return rows.map((row) => ({
+      id: String(row.id),
+      fileName: String(row.file_name),
+      capturedAt: dateValue(row.captured_at),
+      note: row.note ? String(row.note) : null,
+      workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export function getPendingSuggestions(): ProgressionSuggestion[] {

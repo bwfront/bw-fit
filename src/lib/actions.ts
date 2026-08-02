@@ -2,7 +2,7 @@
 
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sqlite } from "@/db";
@@ -200,8 +200,8 @@ export async function addBodyWeight(formData: FormData) {
 }
 
 export async function addProgressPhotos(formData: FormData): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
-  await requireOwner();
   try {
+    await requireOwner();
     const photos = formData.getAll("photos").filter((entry): entry is File => entry instanceof File && entry.size > 0);
     if (!photos.length) return { ok: false, error: "Kein Foto ausgewählt." };
     if (photos.length > 12) return { ok: false, error: "Maximal 12 Fotos auf einmal." };
@@ -210,10 +210,12 @@ export async function addProgressPhotos(formData: FormData): Promise<{ ok: true;
     const note = z.string().max(300).catch("").parse(typeof noteRaw === "string" ? noteRaw : "");
     const workoutRaw = formData.get("workoutSessionId");
     const workoutSessionId = typeof workoutRaw === "string" && workoutRaw
-      ? z.string().uuid().parse(workoutRaw)
+      ? z.string().uuid().safeParse(workoutRaw)
       : null;
-    if (workoutSessionId) {
-      const workout = getWorkoutSession(workoutSessionId);
+    if (workoutSessionId && !workoutSessionId.success) return { ok: false, error: "Ungültige Training-ID." };
+    const linkedWorkoutId = workoutSessionId?.success ? workoutSessionId.data : null;
+    if (linkedWorkoutId) {
+      const workout = getWorkoutSession(linkedWorkoutId);
       if (!workout || workout.status !== "completed") return { ok: false, error: "Training für das Foto nicht gefunden." };
     }
 
@@ -231,17 +233,21 @@ export async function addProgressPhotos(formData: FormData): Promise<{ ok: true;
       const id = crypto.randomUUID();
       const fileName = `${id}.${extension}`;
       await writeFile(progressPhotoFilePath(fileName), Buffer.from(bytes));
-      insert.run(id, fileName, Date.now(), note.trim() || null, workoutSessionId);
+      insert.run(id, fileName, Date.now(), note.trim() || null, linkedWorkoutId);
       saved += 1;
     }
 
     revalidatePath("/fortschritt");
-    if (workoutSessionId) revalidatePath(`/training/${workoutSessionId}/abschluss`);
+    if (linkedWorkoutId) revalidatePath(`/training/${linkedWorkoutId}/abschluss`);
     return { ok: true, count: saved };
   } catch (cause) {
+    unstable_rethrow(cause);
     const message = cause instanceof Error ? cause.message : "Fotos konnten nicht gespeichert werden.";
     if (/EACCES|EPERM|EROFS/i.test(message)) {
       return { ok: false, error: "Kein Schreibzugriff auf den Foto-Ordner. Volume/Rechte prüfen." };
+    }
+    if (/no such table|progress_photo/i.test(message)) {
+      return { ok: false, error: "Foto-Datenbank noch nicht bereit. App einmal neu starten." };
     }
     return { ok: false, error: message };
   }
@@ -256,19 +262,26 @@ export async function addProgressPhoto(formData: FormData) {
   return addProgressPhotos(formData);
 }
 
-export async function deleteProgressPhoto(photoId: string) {
-  await requireOwner();
-  const id = z.string().uuid().parse(photoId);
-  const photo = getProgressPhoto(id);
-  if (!photo || !isSafeProgressPhotoFileName(photo.fileName)) throw new Error("Foto nicht gefunden.");
-  sqlite.prepare("DELETE FROM progress_photo WHERE id = ?").run(id);
+export async function deleteProgressPhoto(photoId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await unlink(progressPhotoFilePath(photo.fileName));
-  } catch {
-    // File may already be missing; metadata delete still succeeds.
+    await requireOwner();
+    const parsed = z.string().uuid().safeParse(photoId);
+    if (!parsed.success) return { ok: false, error: "Ungültige Foto-ID." };
+    const photo = getProgressPhoto(parsed.data);
+    if (!photo || !isSafeProgressPhotoFileName(photo.fileName)) return { ok: false, error: "Foto nicht gefunden." };
+    sqlite.prepare("DELETE FROM progress_photo WHERE id = ?").run(parsed.data);
+    try {
+      await unlink(progressPhotoFilePath(photo.fileName));
+    } catch {
+      // File may already be missing; metadata delete still succeeds.
+    }
+    revalidatePath("/fortschritt");
+    if (photo.workoutSessionId) revalidatePath(`/training/${photo.workoutSessionId}/abschluss`);
+    return { ok: true };
+  } catch (cause) {
+    unstable_rethrow(cause);
+    return { ok: false, error: cause instanceof Error ? cause.message : "Foto konnte nicht gelöscht werden." };
   }
-  revalidatePath("/fortschritt");
-  if (photo.workoutSessionId) revalidatePath(`/training/${photo.workoutSessionId}/abschluss`);
 }
 
 export async function updatePlanSlot(formData: FormData) {

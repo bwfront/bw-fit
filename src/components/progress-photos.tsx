@@ -69,16 +69,20 @@ export function ProgressPhotoCapture({ workoutSessionId, existingCount = 0 }: { 
     if (note.trim()) data.set("note", note.trim());
     if (workoutSessionId) data.set("workoutSessionId", workoutSessionId);
     startTransition(async () => {
-      const result = await addProgressPhotos(data);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await addProgressPhotos(data);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setSavedCount((count) => count + result.count);
+        setError(null);
+        clearItems();
+        setNote("");
+        router.refresh();
+      } catch {
+        setError("Speichern fehlgeschlagen. Bitte erneut versuchen.");
       }
-      setSavedCount((count) => count + result.count);
-      setError(null);
-      clearItems();
-      setNote("");
-      router.refresh();
     });
   }
 
@@ -144,15 +148,25 @@ export function ProgressPhotoBook({ photos }: { photos: ProgressPhoto[] }) {
   const router = useRouter();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const active = photos.find((photo) => photo.id === activeId) ?? null;
   const activeIndex = active ? photos.findIndex((photo) => photo.id === active.id) : -1;
 
   function remove(id: string) {
     if (!window.confirm("Dieses Fortschrittsfoto wirklich löschen?")) return;
     startTransition(async () => {
-      await deleteProgressPhoto(id);
-      setActiveId(null);
-      router.refresh();
+      try {
+        const result = await deleteProgressPhoto(id);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setError(null);
+        setActiveId(null);
+        router.refresh();
+      } catch {
+        setError("Löschen fehlgeschlagen. Bitte erneut versuchen.");
+      }
     });
   }
 
@@ -162,6 +176,7 @@ export function ProgressPhotoBook({ photos }: { photos: ProgressPhoto[] }) {
 
   return (
     <>
+      {error && <p className="photo-error" role="alert">{error}</p>}
       <div className="photo-book-grid">
         {photos.map((photo) => (
           <button type="button" className="photo-book-tile" key={photo.id} onClick={() => setActiveId(photo.id)} aria-label={`Fortschrittsfoto vom ${formatPhotoDate(photo.capturedAt)}`}>
@@ -189,6 +204,7 @@ export function ProgressPhotoBook({ photos }: { photos: ProgressPhoto[] }) {
               <button type="button" className="button" disabled={activeIndex <= 0} onClick={() => setActiveId(photos[activeIndex - 1]?.id ?? null)}>Zurück</button>
               <button type="button" className="button" disabled={activeIndex >= photos.length - 1} onClick={() => setActiveId(photos[activeIndex + 1]?.id ?? null)}>Weiter</button>
             </div>
+            {error && <p className="photo-error" role="alert">{error}</p>}
             <button type="button" className="button" disabled={pending} onClick={() => remove(active.id)}>
               <Trash2 size={16} />{pending ? "Löscht…" : "Foto löschen"}
             </button>
