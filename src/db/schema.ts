@@ -131,6 +131,14 @@ export const progressionSuggestion = sqliteTable("progression_suggestion", {
   createdAt: timestamp("created_at").notNull(),
 });
 
+export const progressPhoto = sqliteTable("progress_photo", {
+  id: text("id").primaryKey(),
+  fileName: text("file_name").notNull(),
+  capturedAt: timestamp("captured_at").notNull(),
+  note: text("note"),
+  workoutSessionId: text("workout_session_id").references(() => workoutSession.id, { onDelete: "set null" }),
+});
+
 export const schema = {
   user,
   session,
@@ -145,4 +153,5 @@ export const schema = {
   setLog,
   bodyWeightEntry,
   progressionSuggestion,
+  progressPhoto,
 };

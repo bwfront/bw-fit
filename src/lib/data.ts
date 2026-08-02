@@ -3,7 +3,7 @@ import "server-only";
 import { sqlite } from "@/db";
 import { buildTrainingPulse, DEFAULT_WEEKLY_TARGET, DUMBBELL_BAR_WEIGHT_GRAMS } from "@/lib/domain";
 import { exerciseMap } from "@/lib/seed";
-import type { BodyWeightEntry, PersonalRecord, PlanCommit, PlanSnapshot, ProgressionSuggestion, ProgressOverview, SetLog, WorkoutExercise, WorkoutSession } from "@/lib/types";
+import type { BodyWeightEntry, PersonalRecord, PlanCommit, PlanSnapshot, ProgressPhoto, ProgressionSuggestion, ProgressOverview, SetLog, WorkoutExercise, WorkoutSession } from "@/lib/types";
 
 type Row = Record<string, unknown>;
 
@@ -139,6 +139,40 @@ export function getBodyWeights(limit = 50) {
   }));
 }
 
+export function getProgressPhotos(limit = 200): ProgressPhoto[] {
+  const rows = sqlite.prepare("SELECT * FROM progress_photo ORDER BY captured_at DESC LIMIT ?").all(limit) as Row[];
+  return rows.map((row) => ({
+    id: String(row.id),
+    fileName: String(row.file_name),
+    capturedAt: dateValue(row.captured_at),
+    note: row.note ? String(row.note) : null,
+    workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
+  }));
+}
+
+export function getProgressPhoto(id: string): ProgressPhoto | null {
+  const row = sqlite.prepare("SELECT * FROM progress_photo WHERE id = ?").get(id) as Row | undefined;
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    fileName: String(row.file_name),
+    capturedAt: dateValue(row.captured_at),
+    note: row.note ? String(row.note) : null,
+    workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
+  };
+}
+
+export function getProgressPhotosForWorkout(workoutSessionId: string): ProgressPhoto[] {
+  const rows = sqlite.prepare("SELECT * FROM progress_photo WHERE workout_session_id = ? ORDER BY captured_at DESC").all(workoutSessionId) as Row[];
+  return rows.map((row) => ({
+    id: String(row.id),
+    fileName: String(row.file_name),
+    capturedAt: dateValue(row.captured_at),
+    note: row.note ? String(row.note) : null,
+    workoutSessionId: row.workout_session_id ? String(row.workout_session_id) : null,
+  }));
+}
+
 export function getPendingSuggestions(): ProgressionSuggestion[] {
   const rows = sqlite.prepare("SELECT * FROM progression_suggestion WHERE status = 'pending' ORDER BY created_at DESC").all() as Row[];
   return rows.map((row) => ({
@@ -228,13 +262,14 @@ export function getBackupPayload() {
   const sessionRows = sqlite.prepare("SELECT id FROM workout_session ORDER BY started_at").all() as Row[];
   const suggestionRows = sqlite.prepare("SELECT * FROM progression_suggestion ORDER BY created_at").all() as Row[];
   return {
-    schemaVersion: 3 as const,
+    schemaVersion: 4 as const,
     exportedAt: new Date().toISOString(),
     planVersions: getPlanVersions(10_000).reverse(),
     activePlanVersionId: String(state.active_plan_version_id),
     completedWorkoutCount: Number(state.completed_workout_count),
     settings,
     bodyWeights: getBodyWeights(10_000).reverse(),
+    progressPhotos: getProgressPhotos(10_000).reverse(),
     workouts: sessionRows.map((row) => getWorkoutSession(String(row.id))).filter((item): item is WorkoutSession => Boolean(item)),
     suggestions: suggestionRows.map((row) => ({
       id: String(row.id),

@@ -92,10 +92,15 @@ export function ensureDatabase(): void {
       from_weight_grams INTEGER NOT NULL, to_weight_grams INTEGER NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending', created_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS progress_photo (
+      id TEXT PRIMARY KEY, file_name TEXT NOT NULL, captured_at INTEGER NOT NULL,
+      note TEXT, workout_session_id TEXT REFERENCES workout_session(id) ON DELETE SET NULL
+    );
     CREATE INDEX IF NOT EXISTS session_user_idx ON session(user_id);
     CREATE INDEX IF NOT EXISTS workout_status_idx ON workout_session(status, started_at);
     CREATE INDEX IF NOT EXISTS workout_exercise_session_idx ON workout_exercise(session_id, position);
     CREATE INDEX IF NOT EXISTS set_exercise_idx ON set_log(workout_exercise_id, set_number);
+    CREATE INDEX IF NOT EXISTS progress_photo_captured_idx ON progress_photo(captured_at DESC);
   `);
 
   const now = Date.now();
@@ -141,6 +146,7 @@ export function ensureDatabase(): void {
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (3, 'leg_raise_3x15', ?)").run(now);
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (4, 'weekly_training_target', ?)").run(now);
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (5, 'ab_split_plan', ?)").run(now);
+    sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (6, 'progress_photos', ?)").run(now);
     return;
   }
 
@@ -222,6 +228,10 @@ export function ensureDatabase(): void {
       }
       sqlite.prepare("INSERT INTO schema_migration (version, name, applied_at) VALUES (5, 'ab_split_plan', ?)").run(now);
     })();
+  }
+
+  if (!appliedMigrations.has(6)) {
+    sqlite.prepare("INSERT INTO schema_migration (version, name, applied_at) VALUES (6, 'progress_photos', ?)").run(now);
   }
 }
 

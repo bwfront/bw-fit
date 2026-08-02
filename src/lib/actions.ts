@@ -1,17 +1,18 @@
 "use server";
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sqlite } from "@/db";
 import { applyTrainingPrescription, calculateVolume, DUMBBELL_BAR_WEIGHT_GRAMS, eligibleForProgression, exercisesForSession, planHasTrainingDays, resolveSessionVariant } from "@/lib/domain";
-import { getActivePlan, getActiveWorkout, getBackupPayload, getWorkoutSession } from "@/lib/data";
+import { getActivePlan, getActiveWorkout, getBackupPayload, getProgressPhoto, getWorkoutSession } from "@/lib/data";
 import { applyAbSplitPlan, applyLegRaiseDefault, legacyWeightToPlateWeight, migrateLegacyPlanWeights } from "@/lib/migrations";
 import { exerciseMap } from "@/lib/seed";
 import { requireOwner } from "@/lib/session";
 import type { PlanSnapshot } from "@/lib/types";
+import { extensionForMime, isSafeProgressPhotoFileName, PROGRESS_PHOTO_MAX_BYTES, progressPhotoFilePath } from "@/lib/uploads";
 
 const setUpdateSchema = z.object({
   setId: z.string().min(1),
@@ -198,6 +199,48 @@ export async function addBodyWeight(formData: FormData) {
   revalidatePath("/fortschritt");
 }
 
+export async function addProgressPhoto(formData: FormData) {
+  await requireOwner();
+  const photo = formData.get("photo");
+  if (!(photo instanceof File) || !photo.size) throw new Error("Kein Foto ausgewählt.");
+  if (photo.size > PROGRESS_PHOTO_MAX_BYTES) throw new Error("Foto ist zu groß (max. 4,5 MB).");
+  const extension = extensionForMime(photo.type);
+  if (!extension) throw new Error("Nur JPEG, PNG oder WebP sind erlaubt.");
+
+  const noteRaw = formData.get("note");
+  const note = z.string().max(300).catch("").parse(typeof noteRaw === "string" ? noteRaw : "");
+  const workoutRaw = formData.get("workoutSessionId");
+  const workoutSessionId = workoutRaw ? z.string().uuid().parse(workoutRaw) : null;
+  if (workoutSessionId) {
+    const workout = getWorkoutSession(workoutSessionId);
+    if (!workout || workout.status !== "completed") throw new Error("Training für das Foto nicht gefunden.");
+  }
+
+  const id = crypto.randomUUID();
+  const fileName = `${id}.${extension}`;
+  const bytes = Buffer.from(await photo.arrayBuffer());
+  await writeFile(progressPhotoFilePath(fileName), bytes);
+  sqlite.prepare("INSERT INTO progress_photo (id, file_name, captured_at, note, workout_session_id) VALUES (?, ?, ?, ?, ?)")
+    .run(id, fileName, Date.now(), note.trim() || null, workoutSessionId);
+  revalidatePath("/fortschritt");
+  if (workoutSessionId) revalidatePath(`/training/${workoutSessionId}/abschluss`);
+}
+
+export async function deleteProgressPhoto(photoId: string) {
+  await requireOwner();
+  const id = z.string().uuid().parse(photoId);
+  const photo = getProgressPhoto(id);
+  if (!photo || !isSafeProgressPhotoFileName(photo.fileName)) throw new Error("Foto nicht gefunden.");
+  sqlite.prepare("DELETE FROM progress_photo WHERE id = ?").run(id);
+  try {
+    await unlink(progressPhotoFilePath(photo.fileName));
+  } catch {
+    // File may already be missing; metadata delete still succeeds.
+  }
+  revalidatePath("/fortschritt");
+  if (photo.workoutSessionId) revalidatePath(`/training/${photo.workoutSessionId}/abschluss`);
+}
+
 export async function updatePlanSlot(formData: FormData) {
   await requireOwner();
   const slotId = z.string().min(1).parse(formData.get("slotId"));
@@ -295,13 +338,20 @@ export async function importBackup(formData: FormData) {
   const file = formData.get("backup");
   if (!(file instanceof File) || !file.size) throw new Error("Keine Sicherungsdatei ausgewählt.");
   const parsed = z.object({
-    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
     exportedAt: z.string(),
     planVersions: z.array(z.object({ id: z.string(), parentId: z.string().nullable(), message: z.string(), snapshot: snapshotSchema, createdAt: z.string() })),
     activePlanVersionId: z.string(),
     completedWorkoutCount: z.number().int().min(0),
     settings: z.object({ targetWeightGrams: z.number().int(), targetDate: z.string(), restSeconds: z.number().int(), weeklyTarget: z.number().int().min(1).max(7).optional(), theme: z.string() }),
     bodyWeights: z.array(z.object({ id: z.string(), weightGrams: z.number(), measuredAt: z.string(), note: z.string().nullable() })),
+    progressPhotos: z.array(z.object({
+      id: z.string(),
+      fileName: z.string(),
+      capturedAt: z.string(),
+      note: z.string().nullable(),
+      workoutSessionId: z.string().nullable(),
+    })).optional(),
     workouts: z.array(z.object({
       id: z.string(), planVersionId: z.string(), status: z.enum(["active", "completed", "cancelled"]),
       startedAt: z.string(), completedAt: z.string().nullable(), note: z.string().nullable(), totalVolumeGrams: z.number().int(),
@@ -320,6 +370,7 @@ export async function importBackup(formData: FormData) {
   sqlite.transaction(() => {
     sqlite.prepare("DELETE FROM set_log").run();
     sqlite.prepare("DELETE FROM workout_exercise").run();
+    sqlite.prepare("DELETE FROM progress_photo").run();
     sqlite.prepare("DELETE FROM workout_session").run();
     sqlite.prepare("DELETE FROM progression_suggestion").run();
     sqlite.prepare("DELETE FROM body_weight_entry").run();
@@ -352,6 +403,11 @@ export async function importBackup(formData: FormData) {
             .run(set.id, item.id, set.setNumber, set.targetReps, weightGrams, set.reps, set.completed ? 1 : 0, set.note, Date.now());
         }
       }
+    }
+    for (const photo of parsed.progressPhotos ?? []) {
+      if (!isSafeProgressPhotoFileName(photo.fileName)) continue;
+      sqlite.prepare("INSERT INTO progress_photo (id, file_name, captured_at, note, workout_session_id) VALUES (?, ?, ?, ?, ?)")
+        .run(photo.id, photo.fileName, new Date(photo.capturedAt).getTime(), photo.note, photo.workoutSessionId);
     }
     for (const suggestion of parsed.suggestions) {
       const fromWeightGrams = parsed.schemaVersion === 1 ? legacyWeightToPlateWeight(suggestion.exerciseKey, suggestion.fromWeightGrams) : suggestion.fromWeightGrams;

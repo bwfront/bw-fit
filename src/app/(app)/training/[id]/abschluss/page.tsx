@@ -1,7 +1,8 @@
 import { ArrowRight, CheckCircle2, Dumbbell, TimerReset, Trophy } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getRecentWorkouts, getWorkoutSession } from "@/lib/data";
+import { ProgressPhotoCapture } from "@/components/progress-photos";
+import { getProgressPhotosForWorkout, getRecentWorkouts, getWorkoutSession } from "@/lib/data";
 
 export default async function WorkoutSummaryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,7 +24,10 @@ export default async function WorkoutSummaryPage({ params }: { params: Promise<{
     return best > 0 && best > (earlierBest.get(item.exerciseKey) ?? 0);
   }).length;
   const volumeDelta = previous ? workout.totalVolumeGrams - previous.totalVolumeGrams : null;
-  const durationMinutes = Math.max(1, Math.round(((workout.completedAt ? new Date(workout.completedAt).getTime() : Date.now()) - new Date(workout.startedAt).getTime()) / 60_000));
+  const endedAt = workout.completedAt ? new Date(workout.completedAt).getTime() : new Date(workout.startedAt).getTime();
+  const durationMinutes = Math.max(1, Math.round((endedAt - new Date(workout.startedAt).getTime()) / 60_000));
+  const photos = workout.status === "completed" ? getProgressPhotosForWorkout(workout.id) : [];
+
   return (
     <main className="summary-page">
       <div className="summary-check"><CheckCircle2 size={44} /></div>
@@ -36,7 +40,9 @@ export default async function WorkoutSummaryPage({ params }: { params: Promise<{
       </div>
       <p className="summary-comparison">{volumeDelta === null ? `Erste Referenzeinheit · ${completedSets} Sätze` : `${volumeDelta >= 0 ? "+" : ""}${(volumeDelta / 1_000_000).toFixed(1)} t zur letzten Einheit · ${completedSets} Sätze`}</p>
       {workout.note && <blockquote>„{workout.note}“</blockquote>}
+      {workout.status === "completed" && <ProgressPhotoCapture existingCount={photos.length} workoutSessionId={workout.id} />}
       <Link className="button primary full" href="/">Zur Übersicht <ArrowRight size={17} /></Link>
+      <Link className="summary-history-link" href="/fortschritt">Bilderbuch ansehen</Link>
       <Link className="summary-history-link" href="/verlauf">Eintrag im Verlauf ansehen</Link>
     </main>
   );

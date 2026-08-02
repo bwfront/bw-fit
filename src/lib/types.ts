@@ -122,6 +122,14 @@ export type ProgressionSuggestion = {
   createdAt: string;
 };
 
+export type ProgressPhoto = {
+  id: string;
+  fileName: string;
+  capturedAt: string;
+  note: string | null;
+  workoutSessionId: string | null;
+};
+
 export type PlanDiff = {
   slotId: string;
   exerciseName: string;

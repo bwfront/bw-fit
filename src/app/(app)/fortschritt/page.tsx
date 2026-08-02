@@ -1,9 +1,10 @@
-import { Activity, CalendarDays, Flame, Scale, Target, Trophy, TrendingUp } from "lucide-react";
+import { Activity, CalendarDays, Camera, Flame, Scale, Target, Trophy, TrendingUp } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
+import { ProgressPhotoBook, ProgressPhotoCapture } from "@/components/progress-photos";
 import { SubmitButton } from "@/components/submit-button";
 import { addBodyWeight } from "@/lib/actions";
 import { formatExerciseLoad, formatKg } from "@/lib/domain";
-import { getBodyWeights, getExerciseStats, getProgressOverview, getSettings } from "@/lib/data";
+import { getBodyWeights, getExerciseStats, getProgressOverview, getProgressPhotos, getSettings } from "@/lib/data";
 
 function asDate(value: string) {
   return new Date(`${value.slice(0, 10)}T12:00:00`);
@@ -44,6 +45,7 @@ export default function ProgressPage() {
   const stats = getExerciseStats();
   const settings = getSettings();
   const progress = getProgressOverview();
+  const photos = getProgressPhotos();
   const maxVolume = Math.max(...stats.map((item) => item.totalVolumeGrams), 1);
   const today = progress.days.find((day) => day.isToday)?.date ?? new Date().toISOString().slice(0, 10);
   const volumeWeeks = progress.weeks.slice(-8);
@@ -70,6 +72,10 @@ export default function ProgressPage() {
           <section className="card summary-block"><span className="metric-label">Einheiten</span><strong>{progress.completedCount}</strong><span>abgeschlossen</span></section>
           <section className="card summary-block accent"><span className="metric-label">Zielgewicht</span><strong>{formatKg(settings.targetWeightGrams)}</strong><span>bis {fullDate(settings.targetDate)}</span></section>
         </div>
+
+        <div className="section-head"><h2 className="section-title">Bilderbuch</h2><Camera size={20} /></div>
+        <ProgressPhotoBook photos={photos} />
+        <ProgressPhotoCapture />
 
         <div className="section-head"><h2 className="section-title">Aktivität</h2><CalendarDays size={20} /></div>
         <section className="card activity-card">

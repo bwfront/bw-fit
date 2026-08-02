@@ -4,6 +4,7 @@ node_modules/
 .env
 data/
 backups/
+uploads/
 playwright-report/
 test-results/
 *.log
