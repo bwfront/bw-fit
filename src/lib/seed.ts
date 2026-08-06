@@ -109,10 +109,10 @@ export const initialPlan: PlanSnapshot = {
   exercises: [
     { slotId: "slot-bench", day: "A", exerciseKeys: ["incline-bench-press", "flat-bench-press"], variantMode: "alternate", weightGrams: 10_000, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
     { slotId: "slot-row", day: "A", exerciseKeys: ["bent-over-row"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 12 }, { reps: 12 }, { reps: 12 }] },
-    { slotId: "slot-shoulder", day: "A", exerciseKeys: ["seated-shoulder-press"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 8 }] },
+    { slotId: "slot-curl", day: "A", exerciseKeys: ["dumbbell-curl", "hammer-curl"], variantMode: "alternate", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 7 }] },
     { slotId: "slot-leg-raise", day: "B", exerciseKeys: ["lying-leg-raise"], variantMode: "fixed", weightGrams: 0, sets: [{ reps: 15 }, { reps: 15 }, { reps: 15 }] },
     { slotId: "slot-squat", day: "B", exerciseKeys: ["goblet-squat"], variantMode: "fixed", weightGrams: 17_500, sets: [{ reps: 10 }, { reps: 10 }, { reps: 10 }] },
-    { slotId: "slot-curl", day: "B", exerciseKeys: ["dumbbell-curl", "hammer-curl"], variantMode: "alternate", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 7 }] },
+    { slotId: "slot-shoulder", day: "B", exerciseKeys: ["seated-shoulder-press"], variantMode: "fixed", weightGrams: 10_000, sets: [{ reps: 10 }, { reps: 10 }, { reps: 8 }] },
   ],
 };
 

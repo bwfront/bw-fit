@@ -38,8 +38,8 @@ describe("Varianten", () => {
     expect(resolveTrainingDay(1)).toBe("B");
     expect(resolveSessionVariant(keys, 0, true)).toBe("incline-bench-press");
     expect(resolveSessionVariant(keys, 2, true)).toBe("flat-bench-press");
-    expect(exercisesForSession(initialPlan, 0).map((item) => item.slotId)).toEqual(["slot-bench", "slot-row", "slot-shoulder"]);
-    expect(exercisesForSession(initialPlan, 1).map((item) => item.slotId)).toEqual(["slot-leg-raise", "slot-squat", "slot-curl"]);
+    expect(exercisesForSession(initialPlan, 0).map((item) => item.slotId)).toEqual(["slot-bench", "slot-row", "slot-curl"]);
+    expect(exercisesForSession(initialPlan, 1).map((item) => item.slotId)).toEqual(["slot-leg-raise", "slot-squat", "slot-shoulder"]);
   });
 });
 
@@ -119,8 +119,8 @@ describe("Plan-Historie", () => {
 
   it("enthält die sechs vereinbarten Planpositionen als Tag A/B", () => {
     expect(initialPlan.exercises).toHaveLength(6);
-    expect(initialPlan.exercises.filter((item) => item.day === "A").map((item) => item.slotId)).toEqual(["slot-bench", "slot-row", "slot-shoulder"]);
-    expect(initialPlan.exercises.filter((item) => item.day === "B").map((item) => item.slotId)).toEqual(["slot-leg-raise", "slot-squat", "slot-curl"]);
+    expect(initialPlan.exercises.filter((item) => item.day === "A").map((item) => item.slotId)).toEqual(["slot-bench", "slot-row", "slot-curl"]);
+    expect(initialPlan.exercises.filter((item) => item.day === "B").map((item) => item.slotId)).toEqual(["slot-leg-raise", "slot-squat", "slot-shoulder"]);
     expect(initialPlan.exercises.find((item) => item.slotId === "slot-leg-raise")?.sets.map((set) => set.reps)).toEqual([15, 15, 15]);
   });
 
@@ -210,7 +210,7 @@ describe("Datenmigrationen", () => {
     const migrated = applyAbSplitPlan(legacy);
     expect(migrated.changed).toBe(true);
     expect(migrated.snapshot.exercises.map((item) => item.slotId)).toEqual([
-      "slot-bench", "slot-row", "slot-shoulder", "slot-leg-raise", "slot-squat", "slot-curl",
+      "slot-bench", "slot-row", "slot-curl", "slot-leg-raise", "slot-squat", "slot-shoulder",
     ]);
     expect(migrated.snapshot.exercises.find((item) => item.slotId === "slot-squat")).toMatchObject({
       day: "B", weightGrams: 20_000, sets: [{ reps: 8 }, { reps: 8 }, { reps: 8 }],

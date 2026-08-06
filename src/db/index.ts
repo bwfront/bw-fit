@@ -147,6 +147,7 @@ export function ensureDatabase(): void {
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (4, 'weekly_training_target', ?)").run(now);
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (5, 'ab_split_plan', ?)").run(now);
     sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (6, 'progress_photos', ?)").run(now);
+    sqlite.prepare("INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES (7, 'ab_split_curls_on_a', ?)").run(now);
     return;
   }
 
@@ -232,6 +233,26 @@ export function ensureDatabase(): void {
 
   if (!appliedMigrations.has(6)) {
     sqlite.prepare("INSERT INTO schema_migration (version, name, applied_at) VALUES (6, 'progress_photos', ?)").run(now);
+  }
+
+  if (!appliedMigrations.has(7)) {
+    sqlite.transaction(() => {
+      const active = sqlite.prepare(`
+        SELECT p.id, p.snapshot_json FROM plan_version p
+        JOIN app_state a ON a.active_plan_version_id = p.id
+        WHERE a.id = 'singleton'
+      `).get() as { id: string; snapshot_json: string } | undefined;
+      if (active) {
+        const result = applyAbSplitPlan(JSON.parse(active.snapshot_json) as PlanSnapshot);
+        if (result.changed) {
+          const id = crypto.randomUUID();
+          sqlite.prepare("INSERT INTO plan_version (id, parent_id, message, snapshot_json, created_at) VALUES (?, ?, ?, ?, ?)")
+            .run(id, active.id, "Curls auf Tag A und Schulterdrücken auf Tag B verschoben", JSON.stringify(result.snapshot), now);
+          sqlite.prepare("UPDATE app_state SET active_plan_version_id = ? WHERE id = 'singleton'").run(id);
+        }
+      }
+      sqlite.prepare("INSERT INTO schema_migration (version, name, applied_at) VALUES (7, 'ab_split_curls_on_a', ?)").run(now);
+    })();
   }
 }
 

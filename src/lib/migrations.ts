@@ -35,10 +35,10 @@ export function applyLegRaiseDefault(snapshot: PlanSnapshot): { snapshot: PlanSn
 const AB_SPLIT_ORDER: Array<{ slotId: string; day: TrainingDay }> = [
   { slotId: "slot-bench", day: "A" },
   { slotId: "slot-row", day: "A" },
-  { slotId: "slot-shoulder", day: "A" },
+  { slotId: "slot-curl", day: "A" },
   { slotId: "slot-leg-raise", day: "B" },
   { slotId: "slot-squat", day: "B" },
-  { slotId: "slot-curl", day: "B" },
+  { slotId: "slot-shoulder", day: "B" },
 ];
 
 function isAbSplitPlan(snapshot: PlanSnapshot): boolean {
